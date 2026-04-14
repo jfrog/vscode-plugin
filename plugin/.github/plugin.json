@@ -1,5 +1,8 @@
 {
   "name": "jfrog",
   "description": "JFrog Platform integration with MCP, security skills, and supply-chain best practices",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "hooks": [
+    "./hooks/hooks.json"
+  ]
 }
