@@ -59,10 +59,6 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 3. Open the Extensions panel (`Cmd+Shift+X`) and search for `@agentPlugins jfrog/vscode-plugin`.
 4. Select the plugin, click **Install**, and click **Trust** if prompted.
 
-### Verify
-
-Open a workspace in VS Code. The plugin's `SessionStart` hook drops a `.github/copilot-instructions.md` into the project — this is the file that teaches Copilot to use the JFrog MCP Gateway. Once present, your approved MCP servers are available to your Copilot agent.
-
 ---
 
 ## Authentication
@@ -144,20 +140,9 @@ After authentication, open a workspace in VS Code. The JFrog Agent Guard starts 
 | "Log in to the remote Jira MCP server using OAuth."     | Authenticates with a remote HTTP-based MCP server (OAuth, API key, or bearer token).                                                        |
 | "Log out of the Jira MCP server."                       | Removes stored authentication credentials for a server.                                                                                     |
 
-### Switch project
-
-If you work across multiple projects, each with its own set of approved MCP servers and tool policies, you can switch contexts without leaving the IDE:
-
-| Ask the agent…                                          | What happens                                                                                                                                |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Which project am I working in?"                        | Displays your active project and any other projects you have access to.                                                                     |
-| "Switch to the `data-engineering` project."             | Syncs the approved servers and tool policies for the new project. Prompts before removing any installed servers not approved in the target. |
-
 ### How secrets are handled
 
 When an MCP server requires sensitive configuration (marked as `isSecret` in the server's metadata), the agent cannot set the value directly. Instead, it returns a CLI command for you to copy and run in your terminal. Secrets such as API keys, tokens, and connection strings are never exposed in the agent chat history.
-
-For local MCPs, the hook configures `.vscode/mcp.json` to reference values through VS Code's `${input:...}` substitution — secret values are entered through VS Code's native secure-input prompt and stored in the OS keychain, never written into the config file.
 
 ---
 
