@@ -12,12 +12,12 @@ Once installed, your Copilot agent can discover and use MCP servers from the **J
 
 Before installing, make sure you have:
 
-- **JFrog Platform access** — An active account with the AI Catalog enabled.
+- **JFrog Platform access** — Your JFrog subscription must include the AI Catalog entitlement. Contact your JFrog account team if you're unsure whether it's enabled.
 - **JFrog project** — At least one MCP server allowed for your project.
 - **JFrog host URL and access token** — Your JFrog platform URL and a valid access token.
 - **VS Code** — With the **GitHub Copilot Chat** extension installed and signed in.
 - **GitHub Copilot editor preview features enabled** — In your GitHub organization settings, navigate to **Settings → Copilot → Policies → Editor preview features** and set it to **Enabled**.
-- **Node.js** (≥ 18) — with `npx` on your `PATH` — required so the `mcp-gateway` can be fetched on demand.
+- **Node.js** (≥ 14) — with `npx` on your `PATH` — required so the `mcp-gateway` can be fetched on demand.
 - **JFrog CLI** (≥ 2.x, optional) — Recommended for `jf config add` authentication (see [Authentication](#authentication)).
 - **JFrog credentials** — Provided in one of two ways (see [Authentication](#authentication)):
 ---
@@ -128,39 +128,7 @@ When an MCP server requires a sensitive configuration, the agent cannot set the 
 
 ## Troubleshooting
 
-### Copilot isn't using the JFrog Agent Guard
-
-The plugin installs `.github/copilot-instructions.md` on session start. If the file is missing:
-
-1. Confirm the plugin is installed and trusted (`Cmd+Shift+P` → **Chat: Show Installed Plugins**).
-2. Reload the VS Code window so the `SessionStart` hook fires again.
-3. Check the file `.github/copilot-instructions.md` exists at the workspace root. The hook only writes it if it is absent — to refresh, delete the file and reload.
-
-### MCP failed to start
-
-The plugin does not install runtimes. Ensure you have Docker, Python, or Node installed locally as required by the specific MCP server, and that any required environment variables are configured.
-
-A server reporting **0 tools** (or **"Discovered 0 tools"**) while shown as **Running** in `MCP: List Servers` is **not** a healthy server with no tools — it means the gateway connected but the underlying MCP did not come up. Right-click the server, choose **Show Output**, and read the last lines for the root cause.
-
-### Tools are not appearing in Copilot chat
-
-Permissions are project-specific. Make sure the MCP is allowed for the specific project configured in your environment (`JF_PROJECT`) and that any tool policies are not blocking the tools you expect.
-
-### Authentication failures on a stored secret
-
-For local MCPs configured with `${input:...}` substitution: click the **Clear** CodeLens above the matching entry in `.vscode/mcp.json`'s `inputs` array, then restart the server — VS Code will re-prompt for the secret.
-
-### Previously-working OAuth MCP suddenly failing
-
-The cached refresh token is likely dead. Ask the agent to "log in to the `<MCP_NAME>` MCP server" again; the gateway runs the OAuth flow and overwrites the old tokens in `~/.jfrog/jfrogmcp.conf.json`.
-
-### Uninstall the plugin
-
-Open `Cmd+Shift+P` → **Chat: Manage Installed Plugins**, select the JFrog plugin, and click **Uninstall**. The `SessionStart` hook stops running once the plugin is removed. The `.github/copilot-instructions.md` file is left in place; delete it manually if you no longer want Copilot governed by the JJFrog Agent Guard.
-
-### Getting help
-
-If you continue to experience issues, open a [GitHub issue](https://github.com/jfrog/vscode-plugin/issues) or contact JFrog support at <devrel@jfrog.com>.
+See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/docs/mcp-registry-troubleshooting).
 
 ---
 
