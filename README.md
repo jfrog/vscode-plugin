@@ -94,47 +94,12 @@ If you already have the JFrog CLI installed and configured, the plugin uses your
 
 ### Option B — Persistent environment variables
 
-Use this if you are not using the JFrog CLI.
+Use this if you are not using the JFrog CLI. Set the following variables in your shell profile (macOS/Linux) or user environment (Windows), then fully restart VS Code:
 
-| Variable                | Description                                                |
-| ----------------------- | ---------------------------------------------------------- |
-| `JFROG_PLATFORM_URL`    | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` |
-| `JFROG_ACCESS_TOKEN`    | Your JFrog access token                                    |
-| `JF_PROJECT`            | Your project key                                           |
-
-**macOS / Linux (zsh or bash):**
-
-Add the variables to your shell profile so they load automatically every time a terminal (or VS Code) starts.
-
-1. Open your profile (`~/.zshrc` on macOS or `~/.bashrc` on Linux):
-   ```bash
-   nano ~/.zshrc
-   ```
-2. Add the following lines at the bottom of the file:
-   ```bash
-   export JFROG_PLATFORM_URL="<your-platform-url>"
-   export JF_PROJECT="<your-project-key>"
-   export JFROG_ACCESS_TOKEN="<your-access-token>"
-   ```
-3. Save and exit (`Ctrl+O`, `Enter`, then `Ctrl+X`).
-4. Apply the changes:
-   ```bash
-   source ~/.zshrc
-   ```
-
-**Windows (PowerShell):**
-
-Use `setx` to save the variables permanently to your user account settings.
-
-```powershell
-setx JFROG_PLATFORM_URL "<your-platform-url>"
-setx JF_PROJECT "<your-project-key>"
-setx JFROG_ACCESS_TOKEN "<your-access-token>"
-```
-
-You must completely close and reopen VS Code for it to recognize the new system variables.
-
-> **Security:** If you use a `.env` file for local development, add it to `.gitignore` so your access token is never committed.
+| Variable             | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
+| `JFROG_PLATFORM_URL` | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` |
+| `JFROG_ACCESS_TOKEN` | Your JFrog access token                                    |
 
 ---
 
@@ -157,7 +122,7 @@ After authentication, open a workspace in VS Code. The JFrog Agent Guard starts 
 
 ### How secrets are handled
 
-When an MCP server requires sensitive configuration (marked as `isSecret` in the server's metadata), the agent cannot set the value directly. Instead, it returns a CLI command for you to copy and run in your terminal. Secrets such as API keys, tokens, and connection strings are never exposed in the agent chat history.
+When an MCP server requires a sensitive configuration, the agent cannot set the value directly. Instead, it returns a CLI command for you to copy and run in your terminal. Secrets such as API keys, tokens, and connection strings are never exposed in the agent chat history.
 
 ---
 
