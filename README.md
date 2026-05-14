@@ -16,13 +16,10 @@ Before installing, make sure you have:
 - **JFrog project** — At least one MCP server allowed for your project.
 - **JFrog host URL and access token** — Your JFrog platform URL and a valid access token.
 - **VS Code** — With the **GitHub Copilot Chat** extension installed and signed in.
-- **GitHub Copilot editor preview features enabled** — In your GitHub organization settings, navigate to **Settings → Copilot → Policies → Editor preview features** and set it to **Enabled**. Also set the environment variable `JF_MCP_GATEWAY_FORCE_ENABLE=true`.
+- **GitHub Copilot editor preview features enabled** — In your GitHub organization settings, navigate to **Settings → Copilot → Policies → Editor preview features** and set it to **Enabled**.
 - **Node.js** (≥ 18) — with `npx` on your `PATH` — required so the `mcp-gateway` can be fetched on demand.
 - **JFrog CLI** (≥ 2.x, optional) — Recommended for `jf config add` authentication (see [Authentication](#authentication)).
 - **JFrog credentials** — Provided in one of two ways (see [Authentication](#authentication)):
-  - `jf config add` via the JFrog CLI (recommended), **or**
-  - `JFROG_PLATFORM_URL` + `JFROG_ACCESS_TOKEN` environment variables.
-
 ---
 
 ## Installation
@@ -31,7 +28,19 @@ You have three options for installing the plugin in VS Code. Pick whichever fits
 
 ### Option 1 — Magic link (recommended)
 
-From the [JFrog Platform → AI/ML → Registry → Your Project → MCP Servers](https://jfrog.com), click **Install MCP**, choose **VS Code** as your IDE, then click **Install via magic link**. Alternatively, open this link in any browser:
+From the JFrog Platform, navigate to **AI/ML → Registry → Your Project → MCP Servers**:
+
+![JFrog Platform — AI/ML → Registry → MCP Servers](docs/images/magic-link-step-1-registry.png)
+
+Select an MCP server, then click **Install MCP**:
+
+![MCP server details — Install MCP button](docs/images/magic-link-step-2-install-mcp.png)
+
+Choose **VS Code** as your IDE, then click **Install via magic link**:
+
+![Install MCP Server dialog — choose VS Code](docs/images/magic-link-step-3-choose-ide.png)
+
+Alternatively, open this link in any browser:
 
 ```
 vscode://chat-plugin/install?source=jfrog/vscode-plugin
@@ -71,7 +80,9 @@ The plugin reads JFrog credentials from environment variables or the JFrog CLI c
 
 ### Option A — JFrog CLI (`jf config add`)
 
-If you already have the JFrog CLI installed and configured, the plugin uses your existing authentication. To configure it:
+If you already have the JFrog CLI installed and configured, the plugin uses your existing authentication — no further setup is required.
+
+**First-time setup only** (if you have never configured the JFrog CLI on this machine):
 
 1. Open your terminal.
 2. Run:
@@ -152,7 +163,7 @@ When an MCP server requires sensitive configuration (marked as `isSecret` in the
 
 ## Troubleshooting
 
-### Copilot isn't using the JFrog MCP Gateway
+### Copilot isn't using the JFrog Agent Guard
 
 The plugin installs `.github/copilot-instructions.md` on session start. If the file is missing:
 
@@ -180,7 +191,7 @@ The cached refresh token is likely dead. Ask the agent to "log in to the `<MCP_N
 
 ### Uninstall the plugin
 
-Open `Cmd+Shift+P` → **Chat: Manage Installed Plugins**, select the JFrog plugin, and click **Uninstall**. The `SessionStart` hook stops running once the plugin is removed. The `.github/copilot-instructions.md` file is left in place; delete it manually if you no longer want Copilot governed by the JFrog MCP Gateway.
+Open `Cmd+Shift+P` → **Chat: Manage Installed Plugins**, select the JFrog plugin, and click **Uninstall**. The `SessionStart` hook stops running once the plugin is removed. The `.github/copilot-instructions.md` file is left in place; delete it manually if you no longer want Copilot governed by the JJFrog Agent Guard.
 
 ### Getting help
 
