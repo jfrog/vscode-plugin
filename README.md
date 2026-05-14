@@ -1,8 +1,10 @@
 # JFrog MCP Integration for VS Code
 
-JFrog integration for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat**: connect your Copilot agent to the [JFrog Agent Guard](https://jfrog.com) for policy-governed MCP access, with all MCP servers installed exclusively through the **JFrog MCP Gateway**.
-
-Installing this plugin wires GitHub Copilot to the JFrog Agent Guard — a local proxy that wraps each MCP server individually and enforces your organization's tool policies on every agent call. After setup, your Copilot agent can discover and use MCP servers from the JFrog MCP Registry without any manual configuration.
+JFrog integration for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat** — connect your Copilot agent to the **JFrog Agent Guard** for policy-governed MCP access.
+<br>
+The **JFrog Agent Guard** is a local proxy that wraps each MCP server and enforces your organization's tool policies on every agent call.
+<br>
+Once installed, your Copilot agent can discover and use MCP servers from the **JFrog MCP Registry** with no manual configuration required.
 
 ---
 
@@ -50,11 +52,13 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 ### Option 3 — Add the marketplace to your VS Code settings
 
 1. Open your user `settings.json` (`Cmd+Shift+P` → **Preferences: Open User Settings (JSON)**).
-2. Add:
+2. Add the following entry inside the top-level `{ ... }` object (don't forget a trailing comma if it isn't the last entry):
    ```json
-   "chat.plugins.marketplaces": [
-     "https://github.com/jfrog/vscode-plugin/"
-   ]
+   {
+     "chat.plugins.marketplaces": [
+       "https://github.com/jfrog/vscode-plugin/"
+     ]
+   }
    ```
 3. Open the Extensions panel (`Cmd+Shift+X`) and search for `@agentPlugins jfrog/vscode-plugin`.
 4. Select the plugin, click **Install**, and click **Trust** if prompted.
