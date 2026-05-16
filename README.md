@@ -25,7 +25,7 @@ Before installing, make sure you have:
 - **JFrog host URL and access token** — Your JFrog platform URL and a valid access token.
 - **VS Code** — With the **GitHub Copilot Chat** extension installed and signed in.
 - **GitHub Copilot editor preview features enabled** — In your GitHub organization settings, navigate to **Settings → Copilot → Policies → Editor preview features** and set it to **Enabled**.
-- **Node.js** (≥ 14) — with `npx` on your `PATH` — required so the `mcp-gateway` can be fetched on demand.
+- **Node.js** (≥ 14) — with `npx` on your `PATH` 
 - **JFrog CLI** (≥ 2.x, optional) — Recommended for `jf config add` authentication (see [Authentication](#authentication)).
 - **JFrog credentials** — Provided in one of two ways (see [Authentication](#authentication)):
 ---
