@@ -10,9 +10,9 @@ Once installed, a session-start hook configures your Copilot agent and the **JFr
 
 The JFrog plugin provides the following capabilities, grouped by component:
 
-| Component | Feature | Description |
-| --- | --- | --- |
-| **Hook** | Copilot governance (Agent Guard) | `SessionStart` hook installs `.github/copilot-instructions.md` into your workspace, teaching the Copilot agent how to manage MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. Secrets are entered through VS Code's secure-input prompts and stored in the OS keychain — never written to chat history or config files. |
+| Component | Feature | Description                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | --- |-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Hook** | Copilot governance (Agent Guard) | Copilot manage MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. Secrets are entered through VS Code's secure-input prompts and stored in the OS keychain — never written to chat history or config files. |
 
 ---
 
