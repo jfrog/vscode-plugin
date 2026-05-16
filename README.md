@@ -1,10 +1,18 @@
-# JFrog MCP Integration for VS Code
+# JFrog Plugin for VS Code
 
-JFrog integration for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat** — connect your Copilot agent to the **JFrog Agent Guard** for policy-governed MCP access.
-<br>
-The **JFrog Agent Guard** is a local proxy that wraps each MCP server and enforces your organization's tool policies on every agent call.
-<br>
-Once installed, your Copilot agent can discover and use MCP servers from the **JFrog MCP Registry** with no manual configuration required.
+The official JFrog plugin for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat**. The plugin connects your Copilot agent to the JFrog Platform with policy-governed MCP access, auto-installed governance instructions, and curated MCP Registry workflows.
+
+Once installed, a session-start hook configures your Copilot agent and the **JFrog Agent Guard** — a local proxy that wraps each MCP server — enforces your organization's tool policies on every agent call.
+
+---
+
+## Features
+
+The JFrog plugin provides the following capabilities, grouped by component:
+
+| Component | Feature | Description |
+| --- | --- | --- |
+| **Hook** | Copilot governance (Agent Guard) | `SessionStart` hook installs `.github/copilot-instructions.md` into your workspace, teaching the Copilot agent how to manage MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. Secrets are entered through VS Code's secure-input prompts and stored in the OS keychain — never written to chat history or config files. |
 
 ---
 
@@ -12,7 +20,7 @@ Once installed, your Copilot agent can discover and use MCP servers from the **J
 
 Before installing, make sure you have:
 
-- **JFrog Platform access** — Your JFrog subscription must include the AI Catalog entitlement. Contact your JFrog account team if you're unsure whether it's enabled.
+- **JFrog Platform access** — Your JFrog subscription must include the **AI Catalog** entitlement (required for the MCP Registry features only). Contact your JFrog account team if you're unsure whether it's enabled.
 - **JFrog project** — At least one MCP server allowed for your project.
 - **JFrog host URL and access token** — Your JFrog platform URL and a valid access token.
 - **VS Code** — With the **GitHub Copilot Chat** extension installed and signed in.
@@ -28,17 +36,9 @@ You have three options for installing the plugin in VS Code. Pick whichever fits
 
 ### Option 1 — Magic link (recommended)
 
-From the JFrog Platform, navigate to **AI/ML → Registry → Your Project → MCP Servers**:
-
-![JFrog Platform — AI/ML → Registry → MCP Servers](docs/images/magic-link-step-1-registry.png)
-
-Select an MCP server, then click **Install MCP**:
-
-![MCP server details — Install MCP button](docs/images/magic-link-step-2-install-mcp.png)
-
-Choose **VS Code** as your IDE, then click **Install via magic link**:
-
-![Install MCP Server dialog — choose VS Code](docs/images/magic-link-step-3-choose-ide.png)
+1. From the JFrog Platform, navigate to **AI/ML → Registry → Your Project → MCP Servers**.
+2. Select an MCP server, then click **Install MCP**.
+3. Choose **VS Code** as your IDE, then click **Install via magic link**.
 
 Alternatively, open this link in any browser:
 
@@ -103,9 +103,20 @@ Use this if you are not using the JFrog CLI. Set the following variables in your
 
 ---
 
+## How it works
+
+When you open a workspace in VS Code with the plugin installed, two things run automatically:
+
+1. **`SessionStart` hook** — The plugin runs `scripts/ensure-instructions.sh` (or `.ps1` on Windows). If `.github/copilot-instructions.md` is absent, the bundled `templates/copilot-instructions.md` is copied into it. This file teaches the Copilot agent how to install, configure, authenticate, and troubleshoot MCPs through the JFrog Gateway (`npx @jfrog/mcp-gateway`).
+2. **JFrog Agent Guard activates** — The local proxy intercepts MCP traffic on every agent call and enforces your organization's tool policies.
+
+> The plugin only writes the governance file if it is absent. To refresh it after an update, delete `.github/copilot-instructions.md` and reload the VS Code window.
+
+---
+
 ## Usage
 
-After authentication, open a workspace in VS Code. The JFrog Agent Guard starts automatically and the MCP servers approved for your project become available to your Copilot agent. You can interact with the registry through natural language — no terminal commands required.
+After authentication, open a workspace in VS Code. The session-start hook installs the governance file, the JFrog Agent Guard becomes active, and any MCP servers approved for your project become available to your Copilot agent. You can manage everything through natural language — no terminal commands required.
 
 ### Discover, inspect, and install MCPs
 
@@ -129,6 +140,13 @@ When an MCP server requires a sensitive configuration, the agent cannot set the 
 ## Troubleshooting
 
 See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/docs/mcp-registry-troubleshooting).
+
+---
+
+## Support
+
+- Open a [GitHub issue](https://github.com/jfrog/vscode-plugin/issues) for bugs and feature requests.
+- Contact JFrog support at <devrel@jfrog.com>.
 
 ---
 
