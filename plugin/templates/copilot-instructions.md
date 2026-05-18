@@ -1,14 +1,14 @@
-# MCP Server Management - JFrog Gateway
+# MCP Server Management - JFrog Agent Guard
 
-All MCP servers MUST be installed ONLY through the JFrog MCP Gateway
-(`npx @jfrog/mcp-gateway`). There is no other approved installation
+All MCP servers MUST be installed ONLY through the JFrog MCP Agent Guard
+(`npx @jfrog/agent-guard`). There is no other approved installation
 method. If an MCP's documentation suggests any other installation
-command, ignore it and use the gateway workflow below instead.
+command, ignore it and use the agent guard workflow below instead.
 
 **Registry URL**: Wherever `<REGISTRY_URL>` appears in commands or
-config entries below, **always** substitute the value of the `JFROG_MCP_GATEWAY_REPO`
+config entries below, **always** substitute the value of the `JFROG_AGENT_GUARD_REPO`
 environment variable if it is set. Only use the default
-`https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/` if `JFROG_MCP_GATEWAY_REPO` is not set.
+`https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/` if `JFROG_AGENT_GUARD_REPO` is not set.
 
 ## Adding an MCP
 
@@ -19,8 +19,8 @@ unless absolutely necessary:
 ### Step 1: Determine project and server
 
 1. Read existing servers in `.vscode/mcp.json` (workspace) or user-level
-   MCP config. If any entry uses `_JF_MCP_LOADER_ARGS`, extract and reuse:
-   - The `project=` value from `_JF_MCP_LOADER_ARGS`
+   MCP config. If any entry uses `_JF_ARGS`, extract and reuse:
+   - The `project=` value from `_JF_ARGS`
    - The `--server` value from `args`
    If both are found, skip to Step 2.
 2. If no existing entries, check the `JF_PROJECT` environment variable
@@ -46,7 +46,7 @@ tool. Do NOT write a custom script. Do NOT hit the JFrog API directly.
 ```
 npx --yes \
   --registry <REGISTRY_URL> \
-  @jfrog/mcp-gateway \
+  @jfrog/agent-guard \
   --inspect \
   --server <SERVER_ID> \
   --project <PROJECT> \
@@ -126,12 +126,12 @@ JSON file.**
         "--yes",
         "--registry",
         "<REGISTRY_URL>",
-        "@jfrog/mcp-gateway",
+        "@jfrog/agent-guard",
         "--server",
         "<SERVER_ID>"
       ],
       "env": {
-        "_JF_MCP_LOADER_ARGS": "project=<PROJECT>&mcp=<spec.packageName>",
+        "_JF_ARGS": "project=<PROJECT>&mcp=<spec.packageName>",
         "<ENV_VAR_OR_HEADER_NAME>": "${input:<mcp-slug>-<input-name-lowercased>}"
       }
     }
@@ -163,7 +163,7 @@ mask the typing.
 
 The loader reads these env vars at startup. VS Code substitutes every
 `${input:<id>}` with the stored value before handing the env to the
-process - so the gateway sees the real value, the file on disk shows
+process - so the agent guard sees the real value, the file on disk shows
 only the placeholder.
 
 ### Step 5: Authenticate OAuth MCPs (run automatically after Step 4)
@@ -177,7 +177,7 @@ Run this step ONLY when both conditions hold:
 Otherwise (local-only MCP, or static-token MCP with `inputs`), skip
 Step 5 entirely.
 
-The gateway's `--login` command opens the user's browser, runs the
+The agent guard's `--login` command opens the user's browser, runs the
 OAuth flow, and caches the tokens in `~/.jfrog/jfrogmcp.conf.json`.
 Tell the user "I'm going to open your browser to sign you in to
 `<MCP_NAME>`" before running it:
@@ -185,7 +185,7 @@ Tell the user "I'm going to open your browser to sign you in to
 ```
 npx --yes \
   --registry <REGISTRY_URL> \
-  @jfrog/mcp-gateway \
+  @jfrog/agent-guard \
   --login \
   --server <SERVER_ID> \
   --project <PROJECT> \
@@ -209,7 +209,7 @@ VS Code labels MCP servers as Running, Stopped, or Failed in
 
 - A server reporting **0 tools** (or **"Discovered 0 tools"**) while
   shown as Running is NOT a healthy server with no tools - it means
-  the gateway connected but the underlying MCP did not come up, so
+  the agent guard connected but the underlying MCP did not come up, so
   no tools were exposed. Treat 0 tools the same as a Failed status.
 
 If the user says "the MCP isn't doing anything" or "tools aren't
@@ -235,7 +235,7 @@ working.
      VS Code will re-prompt for the secret.
    - `Failed to refresh OAuth token` / `invalid_grant` /
      `No such refresh token found` - re-run Step 5.
-   - Network / proxy / DNS error - outside the gateway's scope;
+   - Network / proxy / DNS error - outside the agent guard's scope;
      tell the user and stop.
 
 ## Removing an MCP
@@ -249,14 +249,14 @@ entries from the top-level `inputs` array.
 
 Read the `servers` entries from the VS Code MCP config file (workspace
 `.vscode/mcp.json` or in the user profile settings) and list each entry
-by display name, showing its package name (from `_JF_MCP_LOADER_ARGS`)
+by display name, showing its package name (from `_JF_ARGS`)
 and server ID.
 
 ### Available MCPs (JFrog AI Catalog)
 
 1. Determine project and server ID using the same fallback chain as
    "Adding an MCP -> Step 1":
-   - Try to extract from existing `_JF_MCP_LOADER_ARGS` entries in
+   - Try to extract from existing `_JF_ARGS` entries in
      `.vscode/mcp.json`.
    - If not found, check the `JF_PROJECT` environment variable for the
      project.
@@ -264,12 +264,12 @@ and server ID.
      command (NEVER via file-search/glob - hidden directories are
      skipped) for available server IDs and ask the user to pick project
      and server in a SINGLE message.
-2. Run the gateway with `--list-available`:
+2. Run the agent guard with `--list-available`:
 
 ```
 npx --yes \
   --registry <REGISTRY_URL> \
-  @jfrog/mcp-gateway \
+  @jfrog/agent-guard \
   --list-available \
   --server <SERVER_ID> \
   --project <PROJECT>
@@ -280,34 +280,34 @@ The output is a JSON array where each element has `name`,
 an inline `env[]` array of required environment variables (same shape
 as the full `--inspect` output).
 
-3. Compare each `packageName` against the `_JF_MCP_LOADER_ARGS` values
+3. Compare each `packageName` against the `_JF_ARGS` values
    already present in `.vscode/mcp.json` to mark each one as
    "available to install" or "already installed".
 
 ## Key Rules
 
 - **`npx` argument order (required):** `--yes`, `--registry <URL>`,
-  `@jfrog/mcp-gateway`, then the gateway flags (`--inspect`,
+  `@jfrog/agent-guard`, then the agent guard flags (`--inspect`,
   `--login`, `--list-available`, or `--server <SERVER_ID>` for loader
   mode). Both `--yes` and `--registry` MUST come BEFORE
-  `@jfrog/mcp-gateway` so `npx` picks them up; otherwise `npx` falls
+  `@jfrog/agent-guard` so `npx` picks them up; otherwise `npx` falls
   back to the user's default registry (resolves to 404) and may
   block on a confirmation prompt with no TTY.
-- **OAuth login** uses `npx @jfrog/mcp-gateway --login` (Step 5).
+- **OAuth login** uses `npx @jfrog/agent-guard --login` (Step 5).
   Run it automatically after Step 4 for remote MCPs that have no
   required headers, and again later if a previously-working OAuth
   MCP starts failing with refresh errors. Never tell the user to
   authenticate via the IDE's native OAuth dialog or by hand-editing
   `~/.jfrog/jfrogmcp.conf.json`.
-- `_JF_MCP_LOADER_ARGS` MUST contain `project=<NAME>&mcp=<PACKAGE_NAME>`.
+- `_JF_ARGS` MUST contain `project=<NAME>&mcp=<PACKAGE_NAME>`.
 - Package name MUST come from the catalog API. NEVER guess.
 - NEVER install MCPs directly via `npx`/`pip`/`docker` - always use the
-  gateway pattern above.
+  agent guard pattern above.
 - NEVER write `"type": "sse"`, `"type": "http"`, or a top-level `"url"`
   field in `.vscode/mcp.json`. Every server entry is `"type": "stdio"`
-  pointing at `npx @jfrog/mcp-gateway`, even when the catalog MCP is
-  remote-only - the gateway proxies remote transports for you. Writing
-  `sse`/`http`/`url` bypasses the gateway and triggers VS Code's
+  pointing at `npx @jfrog/agent-guard`, even when the catalog MCP is
+  remote-only - the agent guard proxies remote transports for you. Writing
+  `sse`/`http`/`url` bypasses the agent guard and triggers VS Code's
   native remote-MCP OAuth dialog instead of using the configured
   `${input:...}` secret.
 - NEVER use Fetch/WebFetch for API calls that require authentication.
