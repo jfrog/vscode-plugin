@@ -1,6 +1,8 @@
 # JFrog Plugin for VS Code
 
-The official JFrog plugin for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat**. The plugin connects your Copilot agent to the JFrog Platform with policy-governed MCP access, auto-installed governance instructions, and Agent Guard.
+The official JFrog plugin for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat**. The plugin connects your Copilot agent to the JFrog Platform with policy-governed MCP access, auto-installed governance instructions, and Agent Guard. [Install Plugin VS Code](vscode://chat-plugin/install?source=jfrog/vscode-plugin)
+
+
 
 ---
 
@@ -37,11 +39,7 @@ You have three options for installing the plugin in VS Code. Pick whichever fits
 2. Select an MCP server, then click **Install MCP**.
 3. Choose **VS Code** as your IDE, then click **Install via magic link**.
 
-Alternatively, open this link in any browser:
-
-```
-vscode://chat-plugin/install?source=jfrog/vscode-plugin
-```
+Alternatively, open this link in any browser: [Install in VS Code](vscode://chat-plugin/install?source=jfrog/vscode-plugin)
 
 VS Code opens, prompts you to install the plugin, and asks you to **Trust** the source.
 
