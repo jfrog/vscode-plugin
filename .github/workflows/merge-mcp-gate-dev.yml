@@ -1,0 +1,90 @@
+# Dev publish on every merge to main. Builds a pre-release install package
+# `mcp-gate-<VERSION>-dev.<run_number>.tgz` (run_number is GitHub's
+# monotonic counter per workflow, e.g. 42 = the 42nd run) and uploads
+# it to entplus dev master generic for internal testing.
+#
+# Engineers install a dev package by downloading the .tgz directly from
+# entplus and passing --package:
+#   curl -sSfLO https://entplus.jfrog.io/artifactory/<dev-generic-repo>/jfrog-mcp-gate/v0.1.0-dev.42/mcp-gate-0.1.0-dev.42.tgz
+#   sudo ./install.sh --package ./mcp-gate-0.1.0-dev.42.tgz
+#
+# Production releases go through release-mcp-gate.yml (manual trigger).
+
+name: Dev publish mcp-gate
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mcp-gate/**"
+      - ".github/workflows/merge-mcp-gate-dev.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  JF_URL: ${{ vars.JF_URL }}
+  JF_OIDC_PROVIDER: ${{ vars.JF_OIDC_PROVIDER }}
+  JF_OIDC_AUDIENCE: ${{ vars.JF_OIDC_AUDIENCE }}
+  JF_PROJECT: jfml
+
+jobs:
+  publish-dev:
+    name: Publish dev package
+    runs-on: devf-dind-amd-scale-set
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # Dev version = <VERSION>-dev.<github.run_number>, e.g. 0.1.0-dev.42.
+      # run_number is GitHub's per-workflow counter; it goes up by 1 each
+      # run, so newer dev packages always sort higher than older ones.
+      - name: Compute dev version
+        id: version
+        run: |
+          set -e
+          BASE_VERSION="$(cat mcp-gate/VERSION)"
+          DEV_VERSION="${BASE_VERSION}-dev.${{ github.run_number }}"
+          echo "DEV_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+          echo "Building dev version: ${DEV_VERSION}"
+
+      - name: Install build tools
+        id: install-tools
+        uses: JFROG/install-tools@master
+        with:
+          install-ngci: 'true'
+
+      - name: Resolve dev generic repo
+        id: pre-build
+        uses: JFROG/next-gen-ci-pre-build@v6.0.1
+        with:
+          project: jfml
+          service-name: jfrog-mcp-gate
+          short-service-name: jfmcpg
+          generic: "true"
+          debug: "true"
+
+      - name: Build install package
+        run: |
+          set -e
+          cd mcp-gate
+          mkdir -p dist
+          tar -czf "dist/mcp-gate-${DEV_VERSION}.tgz" bin lib VERSION
+          ls -la dist/
+
+      - name: Upload dev package to entplus
+        env:
+          JF_ACCESS_TOKEN: ${{ steps.install-tools.outputs.oidc-token }}
+          TARGET_REPO: ${{ fromJSON(steps.pre-build.outputs.metadata).repositories.generic.deploy }}
+        run: |
+          set -e
+          DEST="${TARGET_REPO}/jfrog-mcp-gate/v${DEV_VERSION}/"
+          echo "==> Uploading mcp-gate-${DEV_VERSION}.tgz -> ${DEST}"
+          jfrog rt upload --fail-no-op --quiet --flat=true \
+            --project="${JF_PROJECT}" \
+            "mcp-gate/dist/mcp-gate-${DEV_VERSION}.tgz" "${DEST}"

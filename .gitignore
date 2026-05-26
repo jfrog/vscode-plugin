@@ -1,0 +1,10 @@
+# JetBrains IDE
+.idea/
+
+# Build / release output
+mcp-gate/dist/
+dist/
+
+# OS noise
+.DS_Store
+Thumbs.db

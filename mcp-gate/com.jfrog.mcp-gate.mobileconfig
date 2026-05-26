@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  JFrog MCP Gate - VS Code policy profile.
+
+  Pushes the single VS Code enterprise policy we need:
+    ChatHooks = true     (controls VS Code setting chat.useHooks)
+                         Forces hooks ON at the policy layer so the user
+                         cannot set chat.useHooks=false to bypass the gate.
+
+  Deploy via MDM (Jamf, Intune, Workspace ONE, Kandji, etc.) or install
+  manually for testing by double-clicking the file and authenticating.
+
+  Verify after install:
+    profiles -P -v | grep com.jfrog.mcp-gate
+    defaults read com.microsoft.VSCode ChatHooks   # should print 1
+
+  Remove:
+    sudo profiles remove -identifier com.jfrog.mcp-gate
+-->
+<plist version="1.0">
+    <dict>
+        <key>PayloadContent</key>
+        <array>
+            <dict>
+                <key>PayloadDisplayName</key>
+                <string>Visual Studio Code - JFrog MCP Gate</string>
+                <key>PayloadIdentifier</key>
+                <string>com.jfrog.mcp-gate.vscode.629FDCB6-2870-464A-9D0D-29BB69BAA49E</string>
+                <key>PayloadType</key>
+                <string>com.microsoft.VSCode</string>
+                <key>PayloadUUID</key>
+                <string>629FDCB6-2870-464A-9D0D-29BB69BAA49E</string>
+                <key>PayloadVersion</key>
+                <integer>1</integer>
+                <key>ChatHooks</key>
+                <true/>
+            </dict>
+        </array>
+        <key>PayloadDescription</key>
+        <string>Forces VS Code chat hooks ON so the JFrog MCP gate PreToolUse hook cannot be disabled by users.</string>
+        <key>PayloadDisplayName</key>
+        <string>JFrog MCP Gate</string>
+        <key>PayloadIdentifier</key>
+        <string>com.jfrog.mcp-gate</string>
+        <key>PayloadOrganization</key>
+        <string>JFrog Ltd.</string>
+        <key>PayloadRemovalDisallowed</key>
+        <false/>
+        <key>PayloadScope</key>
+        <string>System</string>
+        <key>PayloadType</key>
+        <string>Configuration</string>
+        <key>PayloadUUID</key>
+        <string>6F3E5914-1350-4637-86B5-A8B3006035D9</string>
+        <key>PayloadVersion</key>
+        <integer>1</integer>
+    </dict>
+</plist>
