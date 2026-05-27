@@ -8,21 +8,12 @@ import { join } from "node:path";
 
 const PRODUCT_NAME = "agent-guard-hook";
 const HOOK_FILE = `${PRODUCT_NAME}.mjs`;
-const HOOK_CONFIG_TILDE = `~/.vscode/hooks/${PRODUCT_NAME}.json`;
 const VERSION_RE = /^\/\/\s*agent-guard-hook-version:\s*(.+)$/m;
 
 const HOME = homedir();
 const HOOK_DIR = join(HOME, ".vscode", "hooks");
 const HOOK_SCRIPT = join(HOOK_DIR, HOOK_FILE);
-const HOOK_CONFIG = join(HOOK_DIR, `${PRODUCT_NAME}.json`);
 const AUDIT_LOG = join(HOOK_DIR, `${PRODUCT_NAME}.log`);
-
-// VS Code's user-level settings.json (kept in sync with agent-guard-hook.mjs).
-const VSCODE_SETTINGS_PATH = (() => {
-  if (platform() === "darwin") return join(HOME, "Library/Application Support/Code/User/settings.json");
-  if (platform() === "win32") return join(process.env.APPDATA ?? join(HOME, "AppData/Roaming"), "Code/User/settings.json");
-  return join(HOME, ".config/Code/User/settings.json");
-})();
 
 const ART_HOST = "https://releases.jfrog.io/artifactory";
 const REPO = "coding-agents-generic";
@@ -140,63 +131,6 @@ const cmdInstall = async () => {
 };
 
 
-// ────────────────────────── uninstall ──────────────────────────
-
-// Fallback for when the hook script was already deleted by hand — strip our
-// key from settings.json directly so we don't leave a dangling entry behind.
-const stripSettingsEntry = () => {
-  if (!existsSync(VSCODE_SETTINGS_PATH)) return;
-  let text;
-  try { text = readFileSync(VSCODE_SETTINGS_PATH, "utf8"); }
-  catch { return; }
-  // VS Code allows JSONC; mimic agent-guard-hook.mjs's stripper.
-  const stripped = text
-    .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, c) => (c ? "" : m))
-    .replace(/,(\s*[}\]])/g, "$1");
-  let parsed;
-  try { parsed = JSON.parse(stripped); } catch { return; }
-  const locations = parsed?.["chat.hookFilesLocations"];
-  if (!locations || typeof locations !== "object" || !(HOOK_CONFIG_TILDE in locations)) return;
-  delete locations[HOOK_CONFIG_TILDE];
-  if (Object.keys(locations).length === 0) delete parsed["chat.hookFilesLocations"];
-  const tmp = `${VSCODE_SETTINGS_PATH}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(parsed, null, 2) + "\n", "utf8");
-  renameSync(tmp, VSCODE_SETTINGS_PATH);
-  log(`stripped settings.json entry at ${VSCODE_SETTINGS_PATH}`);
-};
-
-
-const cmdUninstall = () => {
-  log(`uninstalling ${PRODUCT_NAME}`);
-
-  if (existsSync(HOOK_SCRIPT)) {
-    spawnSync(process.execPath, [HOOK_SCRIPT, "--unregister"], { stdio: "inherit" });
-  } else {
-    log("hook script not present, cleaning settings.json directly");
-    stripSettingsEntry();
-  }
-
-  // Archive the audit log rather than delete it — forensics for IT.
-  if (existsSync(AUDIT_LOG)) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const archivedLog = `${AUDIT_LOG}.uninstalled-${stamp}`;
-    renameSync(AUDIT_LOG, archivedLog);
-    log(`archived audit log → ${archivedLog}`);
-  }
-
-  for (const path of [HOOK_SCRIPT, HOOK_CONFIG]) {
-    if (existsSync(path)) {
-      rmSync(path);
-      log(`removed ${path}`);
-    }
-  }
-  log("done");
-};
-
-
 // ────────────────────────── entrypoint ──────────────────────────
 
-(async () => {
-  if (flag("--uninstall")) cmdUninstall();
-  else await cmdInstall();
-})().catch((err) => exitWithError(err?.stack ?? err?.message ?? String(err)));
+cmdInstall().catch((err) => exitWithError(err?.stack ?? err?.message ?? String(err)));

@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   JFrog Ltd. — MDM profile that locks VS Code's ChatHooks = true.
-  This is the ONLY enterprise policy VS Code exposes for hooks. The
-  per-user hook registration (chat.hookFilesLocations) is NOT MDM-pushable
-  and is performed by install.mjs.
-
   Deploy via Jamf / Intune / Kandji etc. Once installed the user cannot
   turn ChatHooks off in VS Code's settings UI.
 -->

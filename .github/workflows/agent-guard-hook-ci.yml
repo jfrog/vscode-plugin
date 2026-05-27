@@ -51,7 +51,7 @@ jobs:
   # metadata example for pre-build step
   #      {
   #        "service_name": "agent-guard-hook",
-  #        "version": "0.1.1",                    // ← computed from existing git tags
+  #        "version": "0.1.1",                    // computed from existing git tags
   #        "build_type": "release",
   #        "build_number": "20260527…",
   #        "rc_tag": "agent-guard-hook/v0.1.1-rc1",

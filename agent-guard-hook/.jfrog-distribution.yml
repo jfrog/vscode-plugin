@@ -4,13 +4,13 @@
 # <VERSION> is interpolated by next-gen-ci-distribution at runtime.
 
 artifacts:
-  # Versioned archive (immutable per version).
+  # Versioned archive.
   - type: generic
     path: agent-guard-hook/<VERSION>/agent-guard-hook-<VERSION>.tgz
     target:
       repository: coding-agents-generic
 
-  # Top-level files (rewritten on every release — what IT downloads).
+  # Top-level files
   - type: generic
     path: agent-guard-hook/install.mjs
     target:

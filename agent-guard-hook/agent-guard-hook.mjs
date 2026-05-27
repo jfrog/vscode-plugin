@@ -8,7 +8,6 @@
 //   Modes:
 //   hook mode: allow / deny one tool call.
 //   --register this hook in VS Code settings.json.
-//   --unregister it (used by uninstall).
 //   --version print the version marker on line 2.
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
@@ -181,9 +180,6 @@ const findServerForTool = (toolName, serverNames) => {
 };
 
 
-// Require the --registry value parses as an http(s) URL. We don't whitelist
-// hostnames — on-prem and customer-owned Artifactory subdomains are legit —
-// but rejecting non-URL strings catches typos and obviously bogus values.
 const isHttpUrl = (value) => {
   try {
     const parsed = new URL(value);
@@ -267,7 +263,7 @@ const hookMode = async () => {
 };
 
 
-// ────────────────────────── --register / --unregister ──────────────────────────
+// ────────────────────────── --register ──────────────────────────
 
 const SETTINGS_INDENT = 2;
 
@@ -287,16 +283,6 @@ const withHookEntry = (current) => {
   const locations = existing && typeof existing === "object" ? { ...existing } : {};
   locations[HOOK_CONFIG_TILDE] = true;
   next["chat.hookFilesLocations"] = locations;
-  return next;
-};
-
-const withoutHookEntry = (current) => {
-  const next = { ...current };
-  const existing = next["chat.hookFilesLocations"];
-  const locations = existing && typeof existing === "object" ? { ...existing } : {};
-  delete locations[HOOK_CONFIG_TILDE];
-  if (Object.keys(locations).length === 0) delete next["chat.hookFilesLocations"];
-  else next["chat.hookFilesLocations"] = locations;
   return next;
 };
 
@@ -343,21 +329,10 @@ const register = () => {
   process.stdout.write(`${PRODUCT_NAME}: registered in ${VSCODE_SETTINGS_PATH}\n`);
 };
 
-const unregister = () => {
-  if (!isHookRegistered()) {
-    process.stdout.write(`${PRODUCT_NAME}: not registered, nothing to remove\n`);
-    return;
-  }
-  updateSettings(withoutHookEntry);
-  process.stdout.write(`${PRODUCT_NAME}: unregistered\n`);
-};
-
-
 // ────────────────────────── entrypoint ──────────────────────────
 
 const arg = process.argv[2];
 if (arg === "--register") register();
-else if (arg === "--unregister") unregister();
 else if (arg === "--version") process.stdout.write(readVersion() + "\n");
 else {
   hookMode().catch((err) => {
