@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  JFrog Ltd. — MDM profile that locks VS Code's ChatHooks = true.
+  This is the ONLY enterprise policy VS Code exposes for hooks. The
+  per-user hook registration (chat.hookFilesLocations) is NOT MDM-pushable
+  and is performed by install.mjs.
+
+  Deploy via Jamf / Intune / Kandji etc. Once installed the user cannot
+  turn ChatHooks off in VS Code's settings UI.
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadDisplayName</key>
+  <string>JFrog Agent Guard Hook — VS Code Chat Hooks</string>
+  <key>PayloadIdentifier</key>
+  <string>com.jfrog.agent-guard-hook</string>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>1F9A4E20-2C5B-4B9E-8A8B-2C5BFAB10000</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadOrganization</key>
+  <string>JFrog Ltd.</string>
+  <key>PayloadScope</key>
+  <string>System</string>
+
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key>
+      <string>com.microsoft.VSCode</string>
+      <key>PayloadIdentifier</key>
+      <string>com.jfrog.agent-guard-hook.vscode</string>
+      <key>PayloadUUID</key>
+      <string>1F9A4E20-2C5B-4B9E-8A8B-2C5BFAB10001</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>PayloadDisplayName</key>
+      <string>VS Code Chat Hooks Lock</string>
+      <key>ChatHooks</key>
+      <true/>
+    </dict>
+  </array>
+</dict>
+</plist>

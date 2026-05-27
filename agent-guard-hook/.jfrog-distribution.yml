@@ -1,0 +1,25 @@
+# Lists the artifacts bundled into a signed release bundle and mirrored to
+# releases.jfrog.io. Consumed by the `distribution` job in
+# .github/workflows/agent-guard-hook-ci.yml.
+# <VERSION> is interpolated by next-gen-ci-distribution at runtime.
+
+artifacts:
+  # Versioned archive (immutable per version).
+  - type: generic
+    path: agent-guard-hook/<VERSION>/agent-guard-hook-<VERSION>.tgz
+    target:
+      repository: coding-agents-generic
+
+  # Top-level files (rewritten on every release — what IT downloads).
+  - type: generic
+    path: agent-guard-hook/install.mjs
+    target:
+      repository: coding-agents-generic
+  - type: generic
+    path: agent-guard-hook/com.jfrog.agent-guard-hook.mobileconfig
+    target:
+      repository: coding-agents-generic
+  - type: generic
+    path: agent-guard-hook/LATEST
+    target:
+      repository: coding-agents-generic

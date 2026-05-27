@@ -1,0 +1,278 @@
+# agent-guard-hook CI Workflow
+# One workflow for dev + release.
+#   - push to any branch          → auto-detected: master/main = release, others = dev
+#   - pull_request targeting main → always a dev build against the PR's source
+#                                   branch. Exercises pre-build → build → post-build
+#                                   end-to-end so a merge can't silently break CI.
+#                                   distribution + promote-latest are skipped
+#                                   (release-only gate).
+#   - workflow_dispatch           → respects the `build-type` input
+
+
+name: agent-guard-hook CI
+
+on:
+  push:
+    paths:
+      - "agent-guard-hook/**"
+      - ".github/workflows/agent-guard-hook-ci.yml"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "agent-guard-hook/**"
+      - ".github/workflows/agent-guard-hook-ci.yml"
+  workflow_dispatch:
+    inputs:
+      build-type:
+        description: 'Override build type (auto=detect from branch, milestone=create milestone build from any branch)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - dev
+          - release
+          - milestone
+        default: 'auto'
+
+concurrency:
+  group: agent-guard-hook-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: write   # needed for RC tag + final tag creation on release builds
+
+env:
+  JF_URL: ${{ vars.JF_URL }}
+  JF_OIDC_PROVIDER: ${{ vars.JF_OIDC_PROVIDER }}
+  JF_OIDC_AUDIENCE: ${{ vars.JF_OIDC_AUDIENCE }}
+  JF_PROJECT: jfml
+
+jobs:
+  # Phase 1 — Pre-Build: generate metadata, decide build_type, resolve repos,
+  # validate dev repos + auto-create the onPushToGH webhook, create RC tag.
+
+  # metadata example for pre-build step
+  #      {
+  #        "service_name": "agent-guard-hook",
+  #        "version": "0.1.1",                    // ← computed from existing git tags
+  #        "build_type": "release",
+  #        "build_number": "20260527…",
+  #        "rc_tag": "agent-guard-hook/v0.1.1-rc1",
+  #        "promotion_stage": "release",          // empty for dev builds
+  #        "repositories": {
+  #          "generic": {
+  #            "deploy": "coding-agents-generic-dev-master-local"   // or release repo
+  #          }
+  #        }
+  #      }
+  pre-build:
+    name: Pre-Build
+    runs-on: devf-dind-amd-scale-set
+    timeout-minutes: 15
+    outputs:
+      metadata: ${{ steps.pre-build.outputs.metadata }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref || github.ref }}
+
+      - uses: JFROG/next-gen-ci-pre-build@v7
+        id: pre-build
+        with:
+          project: jfml
+          service-name: agent-guard-hook
+          short-service-name: aghook    # used only on preRelease/aghook-* branches
+          build-type: ${{ inputs.build-type || 'auto' }} # auto → master/main = release, others = dev
+          create-release-candidate-tag: 'true' # push an RC git tag like agent-guard-hook/v0.1.1-rc1
+          # GitHub App credentials so it can push tags
+          cross-repo-token-app-id: ${{ vars.CROSS_REPO_TOKEN_APP_ID }}
+          cross-repo-token-private-key: ${{ secrets.CROSS_REPO_TOKEN_PRIVATE_KEY }}
+          # creates the Artifactory webhook that auto-provisions dev repos for new branches
+          jfrog-webhook-creds: ${{ secrets.JFDEV_WEBHOOK_CREDS }}
+          generic: 'true' # Single-file ".mjs" packaged as a generic .tgz.
+
+  # Phase 5(a) — Custom build: sed the metadata.version into line 2 of the
+  # .mjs, tar, upload to the deploy repo, publish build-info.
+  build-and-upload:
+    name: Build & Upload
+    needs: pre-build
+    runs-on: devf-dind-amd-scale-set
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+    env:
+      VERSION:      ${{ fromJSON(needs.pre-build.outputs.metadata).version }}
+      BUILD_NAME:   ${{ fromJSON(needs.pre-build.outputs.metadata).service_name }}-${{ fromJSON(needs.pre-build.outputs.metadata).build_type }}
+      BUILD_NUMBER: ${{ fromJSON(needs.pre-build.outputs.metadata).build_number }}
+      TARGET_REPO:  ${{ fromJSON(needs.pre-build.outputs.metadata).repositories.generic.deploy }}
+    steps:
+      - name: Checkout (pinned to RC tag when available)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ fromJSON(needs.pre-build.outputs.metadata).rc_tag || github.head_ref || github.ref }}
+
+      - name: Expose version as a job output
+        id: metadata
+        run: |
+          set -e
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building agent-guard-hook ${VERSION}"
+
+      # Inject the metadata-derived version into line 2 of the .mjs.
+      - name: Inject version into agent-guard-hook.mjs
+        run: |
+          set -e
+          FILE=agent-guard-hook/agent-guard-hook.mjs
+          # Replace the version marker on line 2. The pattern accepts any
+          # existing value so re-runs are idempotent.
+          sed -i -E "2s|^// agent-guard-hook-version: .*$|// agent-guard-hook-version: ${VERSION}|" "${FILE}"
+          echo "Line 2 after injection:"
+          sed -n '2p' "${FILE}"
+          # Guard rail: fail loudly if the marker line didn't end up containing the version.
+          grep -q "^// agent-guard-hook-version: ${VERSION}$" <(sed -n '2p' "${FILE}") \
+            || { echo "version injection failed" >&2; exit 1; }
+
+      # Needed by upload + build-publish steps below
+      - name: Install build tools
+        id: install-tools
+        uses: JFROG/install-tools@v1
+        with:
+          install-ngci: 'true'
+
+      # Two artifacts: the versioned archive + a plain-text LATEST file with the version string
+      - name: Build install package
+        run: |
+          set -e
+          cd agent-guard-hook
+          mkdir -p dist
+          TGZ="agent-guard-hook-${VERSION}.tgz"
+          tar -czf "dist/${TGZ}" agent-guard-hook.mjs
+          echo "${VERSION}" > dist/LATEST
+          ls -la dist/
+
+      # Goes to ${TARGET_REPO}/agent-guard-hook/…. Uses OIDC token from install-tools outputs.
+      - name: Upload artifacts to Artifactory
+        env:
+          JF_ACCESS_TOKEN: ${{ steps.install-tools.outputs.oidc-token }}
+        run: |
+          set -e
+          BASE="${TARGET_REPO}/agent-guard-hook"
+
+          echo "==> Versioned archive -> ${BASE}/${VERSION}/"
+          jfrog rt upload --fail-no-op --quiet --flat=true \
+            --build-name="${BUILD_NAME}" --build-number="${BUILD_NUMBER}" \
+            --project="${JF_PROJECT}" \
+            "agent-guard-hook/dist/agent-guard-hook-${VERSION}.tgz" "${BASE}/${VERSION}/"
+
+          echo "==> Top-level artifacts -> ${BASE}/"
+          for f in install.mjs com.jfrog.agent-guard-hook.mobileconfig; do
+            jfrog rt upload --fail-no-op --quiet --flat=true \
+              --build-name="${BUILD_NAME}" --build-number="${BUILD_NUMBER}" \
+              --project="${JF_PROJECT}" \
+              "agent-guard-hook/${f}" "${BASE}/${f}"
+          done
+          jfrog rt upload --fail-no-op --quiet --flat=true \
+            --build-name="${BUILD_NAME}" --build-number="${BUILD_NUMBER}" \
+            --project="${JF_PROJECT}" \
+            "agent-guard-hook/dist/LATEST" "${BASE}/LATEST"
+
+      # Tells Artifactory "these uploads belong to build ${BUILD_NAME}/${BUILD_NUMBER}". This is what later phases discover by name.
+      - name: Publish build info
+        env:
+          JF_ACCESS_TOKEN: ${{ steps.install-tools.outputs.oidc-token }}
+        run: |
+          set -e
+          jfrog rt build-publish "${BUILD_NAME}" "${BUILD_NUMBER}" --project="${JF_PROJECT}"
+
+  #  Finds the build-info we just published (by name + timestamp from metadata).
+  #  Aggregates it into a Release Bundle — JFrog's signed, immutable collection of artifacts.
+  #  If metadata.promotion_stage is non-empty (release / milestone builds), promotes the bundle to that environment.
+  #  On promotion success, pushes the final git tag (agent-guard-hook/v0.1.1) and deletes the RC tag.
+  #  Outputs the bundle name + version + final tag, exposed as job outputs.
+  #For PR / dev builds: promotion_stage is empty, so step 3+ skip. The job still succeeds.
+  post-build:
+    name: Post-Build
+    needs: [pre-build, build-and-upload]
+    runs-on: devf-dind-amd-scale-set
+    timeout-minutes: 20
+    outputs:
+      promotion-successful: ${{ steps.post-build.outputs.promotion-successful }}
+      bundle-name: ${{ steps.post-build.outputs.bundle-name }}
+      bundle-version: ${{ steps.post-build.outputs.bundle-version }}
+      final-tag: ${{ steps.post-build.outputs.final-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: JFROG/next-gen-ci-post-build@v4
+        id: post-build
+        with:
+          metadata: ${{ needs.pre-build.outputs.metadata }}
+          # cross-repo-token used for final tag push + RC tag cleanup.
+          cross-repo-token-app-id: ${{ vars.CROSS_REPO_TOKEN_APP_ID }}
+          cross-repo-token-private-key: ${{ secrets.CROSS_REPO_TOKEN_PRIVATE_KEY }}
+
+  # Distribution: mirror release builds to releases.jfrog.io. Only fires on release builds (milestone has distribute_to_edges=false).
+  # What this does: takes the Release Bundle post-build created, and mirrors it from the internal Artifactory to
+  # releases.jfrog.io — the customer-facing edge. The .jfrog-distribution.yml file lists which files inside the
+  # bundle to include in the mirror. After this step succeeds, the artifacts are live on
+  # releases.jfrog.io/artifactory/coding-agents-generic/agent-guard-hook/<version>/….
+  distribution:
+    name: Distribution
+    needs: [pre-build, build-and-upload, post-build]
+    if: ${{ fromJSON(needs.pre-build.outputs.metadata).build_type == 'release' && needs.post-build.result == 'success' }}
+    runs-on: devf-dind-amd-scale-set
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Distribute to release edges
+        uses: JFROG/next-gen-ci-distribution@v2
+        with:
+          metadata: ${{ needs.pre-build.outputs.metadata }}
+          service: ${{ fromJSON(needs.pre-build.outputs.metadata).service_name }}
+          version: ${{ needs.build-and-upload.outputs.version }}
+          project: jfml
+          distribution-type: onprem
+          distribution-manifest: agent-guard-hook/.jfrog-distribution.yml
+          skip-scan: 'true'
+          skip-clamav: 'true'
+
+  # Copies every file under the new version directory into the latest/ directory.
+  promote-latest:
+    name: Promote to latest on releases.jfrog.io
+    needs: [pre-build, build-and-upload, post-build, distribution]
+    if: ${{ fromJSON(needs.pre-build.outputs.metadata).build_type == 'release' && needs.distribution.result == 'success' }}
+    runs-on: devf-dind-amd-scale-set
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.build-and-upload.outputs.version }}
+      RELEASES_URL: https://releases.jfrog.io/artifactory/
+    steps:
+      - name: Install build tools
+        id: install-tools
+        uses: JFROG/install-tools@v1
+        with:
+          install-ngci: 'true'
+
+      - name: Copy versioned archive to latest/ on releases.jfrog.io
+        env:
+          JF_ACCESS_TOKEN: ${{ steps.install-tools.outputs.oidc-token }}
+        run: |
+          set -e
+          echo "Copying ${VERSION} to latest/ on releases.jfrog.io..."
+          jf rt cp --fail-no-op \
+            "coding-agents-generic/agent-guard-hook/${VERSION}/(*)" \
+            "coding-agents-generic/agent-guard-hook/latest/{1}" \
+            --url="${RELEASES_URL}" \
+            --access-token="${JF_ACCESS_TOKEN}"
+          echo "Done."
