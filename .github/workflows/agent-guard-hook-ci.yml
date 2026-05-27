@@ -1,9 +1,16 @@
 # agent-guard-hook CI Workflow
+#
+# All builds — dev AND release — upload to the same internal generic repo
+# (dev-master-generic-local/agent-guard-hook/<version>/). The difference is
+# what happens *after* the upload:
+#
 #   - pull_request   → validation only. Runs pre-build + build-and-upload's
 #                      local steps (sed-inject + tar). NO Artifactory upload, NO post-build.
-#   - push (main)    → "dev" upload. Pushes the merged commit's archive into entplus NOT distributed to releases.jfrog.io.
-#   - workflow_dispatch with build-type=release → full release flow. Uploads to release repo, creates Release Bundle, promotes,
-#     mirrors to releases.jfrog.io, updates latest/. Run this manually when the dev build has been verified.
+#   - push (main)    → "dev" upload to dev-master-generic-local.
+#   - workflow_dispatch with build-type=release → "release" upload to the same
+#                      dev-master-generic-local, plus post-build (Release Bundle v2 + promotion),
+#                      distribution (mirror to releases.jfrog.io/coding-agents-generic/),
+#                      and promote-latest. Run manually after the dev build has been verified.
 
 
 name: agent-guard-hook CI
@@ -58,7 +65,7 @@ jobs:
   #        "promotion_stage": "release",          // empty for dev builds
   #        "repositories": {
   #          "generic": {
-  #            "deploy": "dev-main-generic-local"   // or "release-generic-local" on release builds
+  #            "deploy": "dev-master-generic-local"
   #          }
   #        }
   #      }
@@ -89,8 +96,6 @@ jobs:
           # GitHub App credentials so it can push tags
           cross-repo-token-app-id: ${{ vars.CROSS_REPO_TOKEN_APP_ID }}
           cross-repo-token-private-key: ${{ secrets.CROSS_REPO_TOKEN_PRIVATE_KEY }}
-          # creates the Artifactory webhook that auto-provisions dev repos for new branches
-          jfrog-webhook-creds: ${{ secrets.JFDEV_WEBHOOK_CREDS }}
           generic: 'true' # Single-file ".mjs" packaged as a generic .tgz.
 
   # sed the metadata.version into line 2 of the.mjs, tar, upload to the deploy repo, publish build-info.
