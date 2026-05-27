@@ -1,28 +1,21 @@
 # agent-guard-hook CI Workflow
-# Three triggers, three gate levels — modeled after mcp-proxy's flow:
 #   - pull_request   → validation only. Runs pre-build + build-and-upload's
-#                      local steps (sed-inject + tar) so a broken build fails
-#                      the PR check. NO Artifactory upload, NO post-build.
-#   - push (master)  → "dev" upload. Pushes the merged commit's archive into
-#                      the internal dev Artifactory repo. NOT distributed to
-#                      releases.jfrog.io. Lets us soak-test internally before
-#                      cutting a release.
-#   - workflow_dispatch with build-type=release → full release flow. Uploads
-#                      to release repo, creates Release Bundle, promotes,
-#                      mirrors to releases.jfrog.io, updates latest/.
-#                      Run this manually when the dev build has been verified.
+#                      local steps (sed-inject + tar). NO Artifactory upload, NO post-build.
+#   - push (main)    → "dev" upload. Pushes the merged commit's archive into entplus NOT distributed to releases.jfrog.io.
+#   - workflow_dispatch with build-type=release → full release flow. Uploads to release repo, creates Release Bundle, promotes,
+#     mirrors to releases.jfrog.io, updates latest/. Run this manually when the dev build has been verified.
 
 
 name: agent-guard-hook CI
 
 on:
   push:
-    branches: [master, main]      # feature-branch pushes do nothing — only merges trigger dev upload
+    branches: [main]
     paths:
       - "agent-guard-hook/**"
       - ".github/workflows/agent-guard-hook-ci.yml"
   pull_request:
-    branches: [master, main]
+    branches: [main]
     paths:
       - "agent-guard-hook/**"
       - ".github/workflows/agent-guard-hook-ci.yml"
@@ -65,7 +58,7 @@ jobs:
   #        "promotion_stage": "release",          // empty for dev builds
   #        "repositories": {
   #          "generic": {
-  #            "deploy": "coding-agents-generic-dev-master-local"   // or release repo
+  #            "deploy": "dev-main-generic-local"   // or "release-generic-local" on release builds
   #          }
   #        }
   #      }
@@ -89,7 +82,7 @@ jobs:
           service-name: agent-guard-hook
           short-service-name: aghook    # used only on preRelease/aghook-* branches
           # 'release' only when explicitly requested via workflow_dispatch.
-          # Everything else (PR validation, push to master) is a dev build.
+          # Everything else (PR validation, push to main) is a dev build.
           build-type: ${{ inputs.build-type == 'release' && 'release' || 'dev' }}
           # No RC tags on PRs — they're throwaway validation runs.
           create-release-candidate-tag: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
@@ -100,8 +93,7 @@ jobs:
           jfrog-webhook-creds: ${{ secrets.JFDEV_WEBHOOK_CREDS }}
           generic: 'true' # Single-file ".mjs" packaged as a generic .tgz.
 
-  # Phase 5(a) — Custom build: sed the metadata.version into line 2 of the
-  # .mjs, tar, upload to the deploy repo, publish build-info.
+  # sed the metadata.version into line 2 of the.mjs, tar, upload to the deploy repo, publish build-info.
   build-and-upload:
     name: Build & Upload
     needs: pre-build
