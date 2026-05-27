@@ -102,19 +102,22 @@ One workflow: `.github/workflows/agent-guard-hook-ci.yml`.
 
 | Trigger | What it does |
 | --- | --- |
-| push to `master`/`main` (touching `agent-guard-hook/**`) | Release build — versioned archive uploaded, release bundle created and promoted, mirrored to releases.jfrog.io, copied into `latest/`. |
-| push to any other branch | Dev build — published to the dev repo. Not distributed. |
-| pull_request → `master`/`main` | Dev build only — exercises pre-build → build → post-build end-to-end. Distribution + promote-latest skipped. |
-| workflow_dispatch | Same flow, but `build-type` can be overridden (`dev` / `release` / `milestone`). |
+| pull_request → `master`/`main` | Validation only. Runs `pre-build` + `build-and-upload`'s local steps (sed-inject + tar) so a broken build fails the PR check. **No Artifactory write.** |
+| push to `master`/`main` (after merge) | Dev build — versioned archive uploaded to the internal dev Artifactory repo for soak testing. **Not distributed to `releases.jfrog.io`.** |
+| workflow_dispatch with `build-type: release` | Full release — uploaded to the release repo, release bundle promoted, mirrored to `releases.jfrog.io`, copied into `latest/`. Run this manually when the dev build has been verified. |
+| Feature-branch pushes (no PR) | Nothing — the workflow is gated on master/main pushes and pull_requests only. |
 
 Jobs run in order: `pre-build` → `build-and-upload` → `post-build` →
 `distribution` (release only) → `promote-latest` (release only).
+On PR runs everything after `build-and-upload`'s local steps is skipped.
 
 ### Cutting a release
 
-1. Merge the change to `master`. The push triggers the workflow with `build-type: auto`, which detects `release` from the branch. The version is computed by `pre-build` from the existing git tags (e.g. previous tag `agent-guard-hook/v0.1.0` → next is `v0.1.1`) and `sed`-injected into line 2 of `agent-guard-hook.mjs` during the build.
-2. Verify the run in GitHub Actions; the `promote-latest` job is the last step.
-3. `install.mjs` now resolves the new version through the `LATEST` file.
+1. Merge the change to `master`. CI fires a dev build automatically; the archive lands in the internal dev Artifactory repo with a version like `0.1.1-devf-…`.
+2. Soak-test the dev archive however internal QA verifies (the dev `install.mjs` and `.tgz` are reachable from the internal dev Artifactory repo).
+3. Go to **GitHub Actions → "agent-guard-hook CI" → Run workflow** and pick `build-type: release`. The version is computed by `pre-build` from the existing git tags (e.g. previous tag `agent-guard-hook/v0.1.0` → next is `v0.1.1`) and `sed`-injected into line 2 of `agent-guard-hook.mjs` during the build.
+4. Verify the run; the `promote-latest` job is the last step.
+5. `install.mjs` now resolves the new version through the `LATEST` file on `releases.jfrog.io`.
 
 ### Local engineer release (before CI is wired up)
 

@@ -1,18 +1,23 @@
 # agent-guard-hook CI Workflow
-# One workflow for dev + release.
-#   - push to any branch          → auto-detected: master/main = release, others = dev
-#   - pull_request targeting main → always a dev build against the PR's source
-#                                   branch. Exercises pre-build → build → post-build
-#                                   end-to-end so a merge can't silently break CI.
-#                                   distribution + promote-latest are skipped
-#                                   (release-only gate).
-#   - workflow_dispatch           → respects the `build-type` input
+# Three triggers, three gate levels — modeled after mcp-proxy's flow:
+#   - pull_request   → validation only. Runs pre-build + build-and-upload's
+#                      local steps (sed-inject + tar) so a broken build fails
+#                      the PR check. NO Artifactory upload, NO post-build.
+#   - push (master)  → "dev" upload. Pushes the merged commit's archive into
+#                      the internal dev Artifactory repo. NOT distributed to
+#                      releases.jfrog.io. Lets us soak-test internally before
+#                      cutting a release.
+#   - workflow_dispatch with build-type=release → full release flow. Uploads
+#                      to release repo, creates Release Bundle, promotes,
+#                      mirrors to releases.jfrog.io, updates latest/.
+#                      Run this manually when the dev build has been verified.
 
 
 name: agent-guard-hook CI
 
 on:
   push:
+    branches: [master, main]      # feature-branch pushes do nothing — only merges trigger dev upload
     paths:
       - "agent-guard-hook/**"
       - ".github/workflows/agent-guard-hook-ci.yml"
@@ -24,15 +29,13 @@ on:
   workflow_dispatch:
     inputs:
       build-type:
-        description: 'Override build type (auto=detect from branch, milestone=create milestone build from any branch)'
+        description: 'dev (default) = internal Artifactory only. release = full publish to releases.jfrog.io.'
         required: false
         type: choice
         options:
-          - auto
           - dev
           - release
-          - milestone
-        default: 'auto'
+        default: 'dev'
 
 concurrency:
   group: agent-guard-hook-${{ github.ref }}
@@ -85,8 +88,11 @@ jobs:
           project: jfml
           service-name: agent-guard-hook
           short-service-name: aghook    # used only on preRelease/aghook-* branches
-          build-type: ${{ inputs.build-type || 'auto' }} # auto → master/main = release, others = dev
-          create-release-candidate-tag: 'true' # push an RC git tag like agent-guard-hook/v0.1.1-rc1
+          # 'release' only when explicitly requested via workflow_dispatch.
+          # Everything else (PR validation, push to master) is a dev build.
+          build-type: ${{ inputs.build-type == 'release' && 'release' || 'dev' }}
+          # No RC tags on PRs — they're throwaway validation runs.
+          create-release-candidate-tag: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
           # GitHub App credentials so it can push tags
           cross-repo-token-app-id: ${{ vars.CROSS_REPO_TOKEN_APP_ID }}
           cross-repo-token-private-key: ${{ secrets.CROSS_REPO_TOKEN_PRIVATE_KEY }}
@@ -154,7 +160,9 @@ jobs:
           ls -la dist/
 
       # Goes to ${TARGET_REPO}/agent-guard-hook/…. Uses OIDC token from install-tools outputs.
+      # Gated on event_name so PR runs never write to Artifactory.
       - name: Upload artifacts to Artifactory
+        if: github.event_name != 'pull_request'
         env:
           JF_ACCESS_TOKEN: ${{ steps.install-tools.outputs.oidc-token }}
         run: |
@@ -181,6 +189,7 @@ jobs:
 
       # Tells Artifactory "these uploads belong to build ${BUILD_NAME}/${BUILD_NUMBER}". This is what later phases discover by name.
       - name: Publish build info
+        if: github.event_name != 'pull_request'
         env:
           JF_ACCESS_TOKEN: ${{ steps.install-tools.outputs.oidc-token }}
         run: |
@@ -189,13 +198,14 @@ jobs:
 
   #  Finds the build-info we just published (by name + timestamp from metadata).
   #  Aggregates it into a Release Bundle — JFrog's signed, immutable collection of artifacts.
-  #  If metadata.promotion_stage is non-empty (release / milestone builds), promotes the bundle to that environment.
+  #  If metadata.promotion_stage is non-empty (release builds), promotes the bundle to that environment.
   #  On promotion success, pushes the final git tag (agent-guard-hook/v0.1.1) and deletes the RC tag.
   #  Outputs the bundle name + version + final tag, exposed as job outputs.
   #For PR / dev builds: promotion_stage is empty, so step 3+ skip. The job still succeeds.
   post-build:
     name: Post-Build
     needs: [pre-build, build-and-upload]
+    if: github.event_name != 'pull_request'
     runs-on: devf-dind-amd-scale-set
     timeout-minutes: 20
     outputs:
@@ -218,7 +228,7 @@ jobs:
           cross-repo-token-app-id: ${{ vars.CROSS_REPO_TOKEN_APP_ID }}
           cross-repo-token-private-key: ${{ secrets.CROSS_REPO_TOKEN_PRIVATE_KEY }}
 
-  # Distribution: mirror release builds to releases.jfrog.io. Only fires on release builds (milestone has distribute_to_edges=false).
+  # Distribution: mirror release builds to releases.jfrog.io. Only fires on release builds.
   # What this does: takes the Release Bundle post-build created, and mirrors it from the internal Artifactory to
   # releases.jfrog.io — the customer-facing edge. The .jfrog-distribution.yml file lists which files inside the
   # bundle to include in the mirror. After this step succeeds, the artifacts are live on
