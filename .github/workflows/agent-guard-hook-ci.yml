@@ -71,7 +71,7 @@ jobs:
   #      }
   pre-build:
     name: Pre-Build
-    runs-on: devf-dind-amd-scale-set
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       metadata: ${{ steps.pre-build.outputs.metadata }}
@@ -102,7 +102,7 @@ jobs:
   build-and-upload:
     name: Build & Upload
     needs: pre-build
-    runs-on: devf-dind-amd-scale-set
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       version: ${{ steps.metadata.outputs.version }}
@@ -203,7 +203,7 @@ jobs:
     name: Post-Build
     needs: [pre-build, build-and-upload]
     if: github.event_name != 'pull_request'
-    runs-on: devf-dind-amd-scale-set
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
       promotion-successful: ${{ steps.post-build.outputs.promotion-successful }}
@@ -234,7 +234,7 @@ jobs:
     name: Distribution
     needs: [pre-build, build-and-upload, post-build]
     if: ${{ fromJSON(needs.pre-build.outputs.metadata).build_type == 'release' && needs.post-build.result == 'success' }}
-    runs-on: devf-dind-amd-scale-set
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -259,7 +259,7 @@ jobs:
     name: Promote to latest on releases.jfrog.io
     needs: [pre-build, build-and-upload, post-build, distribution]
     if: ${{ fromJSON(needs.pre-build.outputs.metadata).build_type == 'release' && needs.distribution.result == 'success' }}
-    runs-on: devf-dind-amd-scale-set
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       VERSION: ${{ needs.build-and-upload.outputs.version }}
