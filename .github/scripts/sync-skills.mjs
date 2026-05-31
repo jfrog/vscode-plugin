@@ -1,9 +1,16 @@
 #!/usr/bin/env node
+// Vendors skill content from the upstream jfrog/jfrog-skills repository
+// into this plugin at release time. `main` itself never contains the
+// synced files — they live only on the release tag.
 //
-// Reads <plugin>/.vendor.json for every plugin in marketplace.json,
-// downloads the upstream tarball at the pinned tag, and copies the
-// listed paths into the plugin folder. Runs at release time only —
-// main stays skill-free.
+// Called by .github/workflows/release.yml. Also safe to run locally to
+// preview what a pin bump will produce;
+//
+// For each plugin listed in marketplace.json, this script:
+//   1. Reads <plugin>/.vendor.json to learn which repo + tag to pull.
+//   2. Downloads that tarball from codeload.github.com (public, no auth).
+//   3. Extracts it into a temp directory.
+//   4. Copies the requested paths (e.g. "skills") into the plugin folder.
 
 import { promises as fs, createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
@@ -12,6 +19,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 
+// filesystem helpers
 async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, "utf8"));
 }
@@ -20,17 +28,27 @@ async function fileExists(filePath) {
   try { await fs.access(filePath); return true; } catch { return false; }
 }
 
-// codeload.github.com serves any public repo's release tarball over HTTPS
-// without auth. The pin in .vendor.json is always a release tag (vX.Y.Z).
+// Step 1: download the upstream tarball
+
+// codeload.github.com serves any public repo's release tarball over
+// HTTPS without auth. The pin in .vendor.json is always a release tag
+// (vX.Y.Z), so we hit the /refs/tags/ URL directly — no fallback logic.
 async function downloadTarball(repo, tag, destPath) {
   const url = `https://codeload.github.com/${repo}/tar.gz/refs/tags/${encodeURIComponent(tag)}`;
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`Could not download ${repo}@${tag} (HTTP ${res.status})`);
-  // Stream straight to disk so we don't buffer the whole tarball in RAM.
   await pipeline(Readable.fromWeb(res.body), createWriteStream(destPath));
   console.log(`  fetched ${url}`);
 }
 
+// Step 2: extract the tarball
+
+// Shells out to the system `tar` instead of pulling in an npm tar library —
+// keeps the script zero-dependency.
+//
+// GitHub tarballs always have exactly one top-level directory whose
+// name encodes the repo + commit. We return that path so the caller
+// knows where to find the extracted tree.
 async function extractTarball(tarballPath, intoDir) {
   await fs.mkdir(intoDir, { recursive: true });
   const result = spawnSync("tar", ["-xzf", tarballPath, "-C", intoDir], { stdio: "inherit" });
@@ -39,6 +57,10 @@ async function extractTarball(tarballPath, intoDir) {
   return path.join(intoDir, topLevel);
 }
 
+// Step 3: copy one path from the extracted tree into the plugin
+
+// Removes the destination first so we never end up with stale leftovers
+// from a previous sync, then creates the destination's parent directory then copies.
 async function copyPath(fromDir, toDir, relativePath) {
   const from = path.join(fromDir, relativePath);
   const to = path.join(toDir, relativePath);
@@ -51,6 +73,8 @@ async function copyPath(fromDir, toDir, relativePath) {
   console.log(`  ${relativePath} -> ${path.relative(process.cwd(), to)}`);
 }
 
+// Sync one plugin: read its .vendor.json, download + extract + copy.
+// Plugins without a .vendor.json are silently skipped.
 async function syncPlugin(plugin, workDir) {
   const pluginDir = path.resolve(plugin.source);
   const vendorPath = path.join(pluginDir, ".vendor.json");
@@ -62,6 +86,7 @@ async function syncPlugin(plugin, workDir) {
   }
 
   console.log(`--- ${plugin.name} ---`);
+  // `slug` is just a unique filename for this plugin's tarball + extract
   const slug = `${repo.replace("/", "-")}-${pin}`;
   const tarball = path.join(workDir, `${slug}.tar.gz`);
   await downloadTarball(repo, pin, tarball);
@@ -69,6 +94,8 @@ async function syncPlugin(plugin, workDir) {
   for (const rel of paths) await copyPath(extracted, pluginDir, rel);
 }
 
+// Entry point: walk marketplace.json, sync each plugin sequentially,
+// always clean up the temp work directory.
 async function main() {
   const marketplace = await readJson("marketplace.json");
   const workDir = await fs.mkdtemp(path.join(tmpdir(), "sync-skills-"));

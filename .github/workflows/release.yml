@@ -2,11 +2,17 @@
 # Licensed under the Apache License, Version 2.0
 # https://www.apache.org/licenses/LICENSE-2.0
 
-# Bundles `main` with skills vendored from each <plugin>/.vendor.json into a
-# detached tag commit. `main` itself is never modified.
+# Tags a release for the Claude Code marketplace.
 #
-# The release version is read straight from marketplace.json — bump it in a
-# normal PR before running this workflow. No inputs required.
+# What this workflow does, in order:
+#   1. Clones the current `main` (which is skill-free — see .gitignore).
+#   2. Pulls skill content from jfrog/jfrog-skills@<pin> into plugin/skills/.
+#   3. Reads the version from marketplace.json (already bumped in a PR).
+#   4. Creates a detached commit, tags it v<version>, and pushes only the
+#      tag. `main` itself is never modified by CI.
+#   5. Publishes a GitHub Release pointing at the tag.
+#
+# To trigger: Actions → "Release plugin" → Run workflow. No inputs needed.
 
 name: Release plugin
 
@@ -14,23 +20,42 @@ on:
   workflow_dispatch:
 
 permissions:
+  # Needed so the workflow can push the new tag and create the release.
   contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      # 1. Check out main
+      # Shallow clone is enough: we never look at past commits, we only
+      # add a new one on a detached HEAD further down.
+      - name: Check out main
+        uses: actions/checkout@v6
         with:
           ref: main
 
-      - uses: actions/setup-node@v6
+      # 2. Install Node
+      # Needed for the sync script and for reading marketplace.json in
+      # the "Resolve release tag" step.
+      - name: Install Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
+      # 3. Vendor the skills from upstream
+      # Downloads the upstream tarball at the pin declared in
+      # plugin/.vendor.json (e.g. jfrog/jfrog-skills@v0.11.0) and copies
+      # its skill folders into plugin/skills/. This is the only change
+      # to the working tree before we commit.
       - name: Sync skills from upstream
-        run: node scripts/sync-skills.mjs
+        run: node .github/scripts/sync-skills.mjs
 
+      # 4. Read the release version from marketplace.json
+      # The version is bumped in a normal PR before triggering this
+      # workflow; the workflow itself never edits files. If the version
+      # is missing or unparseable, fail loudly here rather than after
+      # creating a malformed tag.
       - name: Resolve release tag
         run: |
           VERSION=$(node -p "require('./marketplace.json').plugins[0].version")
@@ -40,6 +65,13 @@ jobs:
           fi
           echo "TAG=v${VERSION}" >> "$GITHUB_ENV"
 
+      # 5. Create a detached commit, tag, and push the tag
+      # `git checkout --detach` lets us commit without moving `main`.
+      # We push only the tag (`origin <TAG>`), so the synced skills
+      # live exclusively on the release tag.
+      #
+      # If the version on main was never bumped, `git push` rejects the
+      # tag as "already exists" — clean failure, no force push.
       - name: Tag the release
         run: |
           git config user.name  "github-actions[bot]"
@@ -50,6 +82,9 @@ jobs:
           git tag "${TAG}"
           git push origin "${TAG}"
 
+      # 6. Publish a GitHub Release
+      # `--generate-notes` asks GitHub to auto-write release notes from
+      # the PRs merged since the previous tag.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
