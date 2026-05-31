@@ -28,7 +28,7 @@ async function fileExists(filePath) {
   try { await fs.access(filePath); return true; } catch { return false; }
 }
 
-// Step 1: download the upstream tarball
+// download the upstream tarball
 
 // codeload.github.com serves any public repo's release tarball over
 // HTTPS without auth. The pin in .vendor.json is always a release tag
@@ -41,7 +41,7 @@ async function downloadTarball(repo, tag, destPath) {
   console.log(`  fetched ${url}`);
 }
 
-// Step 2: extract the tarball
+// extract the tarball
 
 // Shells out to the system `tar` instead of pulling in an npm tar library —
 // keeps the script zero-dependency.
@@ -57,7 +57,7 @@ async function extractTarball(tarballPath, intoDir) {
   return path.join(intoDir, topLevel);
 }
 
-// Step 3: copy one path from the extracted tree into the plugin
+// copy one path from the extracted tree into the plugin
 
 // Removes the destination first so we never end up with stale leftovers
 // from a previous sync, then creates the destination's parent directory then copies.

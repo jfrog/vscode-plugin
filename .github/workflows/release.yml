@@ -27,7 +27,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      # 1. Check out main
+      # Check out main
       # Shallow clone is enough: we never look at past commits, we only
       # add a new one on a detached HEAD further down.
       - name: Check out main
@@ -35,7 +35,7 @@ jobs:
         with:
           ref: main
 
-      # 2. Install Node
+      # Install Node
       # Needed for the sync script and for reading marketplace.json in
       # the "Resolve release tag" step.
       - name: Install Node.js
@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: "20"
 
-      # 3. Vendor the skills from upstream
+      # Vendor the skills from upstream
       # Downloads the upstream tarball at the pin declared in
       # plugin/.vendor.json (e.g. jfrog/jfrog-skills@v0.11.0) and copies
       # its skill folders into plugin/skills/. This is the only change
@@ -51,7 +51,7 @@ jobs:
       - name: Sync skills from upstream
         run: node .github/scripts/sync-skills.mjs
 
-      # 4. Read the release version from marketplace.json
+      # Read the release version from marketplace.json
       # The version is bumped in a normal PR before triggering this
       # workflow; the workflow itself never edits files. If the version
       # is missing or unparseable, fail loudly here rather than after
@@ -65,7 +65,7 @@ jobs:
           fi
           echo "TAG=v${VERSION}" >> "$GITHUB_ENV"
 
-      # 5. Create a detached commit, tag, and push the tag
+      # Create a detached commit, tag, and push the tag
       # `git checkout --detach` lets us commit without moving `main`.
       # We push only the tag (`origin <TAG>`), so the synced skills
       # live exclusively on the release tag.
@@ -82,7 +82,7 @@ jobs:
           git tag "${TAG}"
           git push origin "${TAG}"
 
-      # 6. Publish a GitHub Release
+      # Publish a GitHub Release
       # `--generate-notes` asks GitHub to auto-write release notes from
       # the PRs merged since the previous tag.
       - name: Create GitHub Release
