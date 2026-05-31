@@ -1,0 +1,57 @@
+# Copyright (c) JFrog Ltd. 2026
+# Licensed under the Apache License, Version 2.0
+# https://www.apache.org/licenses/LICENSE-2.0
+
+# Bundles `main` with skills vendored from each <plugin>/.vendor.json into a
+# detached tag commit. `main` itself is never modified.
+#
+# The release version is read straight from marketplace.json — bump it in a
+# normal PR before running this workflow. No inputs required.
+
+name: Release plugin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Sync skills from upstream
+        run: node scripts/sync-skills.mjs
+
+      - name: Resolve release tag
+        run: |
+          VERSION=$(node -p "require('./marketplace.json').plugins[0].version")
+          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
+            echo "::error::Could not read version from marketplace.json"
+            exit 1
+          fi
+          echo "TAG=v${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Tag the release
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --detach
+          git add -A
+          git commit -m "Release ${TAG}"
+          git tag "${TAG}"
+          git push origin "${TAG}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${TAG}" --title "${TAG}" --generate-notes

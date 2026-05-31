@@ -1,0 +1,5 @@
+# IDE settings
+.idea/
+
+# agent-guard-hook build artifacts
+agent-guard-hook/dist/
