@@ -53,14 +53,19 @@ jobs:
 
       # Read the release version from marketplace.json
       # The version is bumped in a normal PR before triggering this
-      # workflow; the workflow itself never edits files. If the version
-      # is missing or unparseable, fail loudly here rather than after
-      # creating a malformed tag.
+      # workflow; the workflow itself never edits files. Fails if the
+      # marketplace has no plugins, a missing version, or plugins with
+      # mismatched versions.
       - name: Resolve release tag
         run: |
-          VERSION=$(node -p "require('./marketplace.json').plugins[0].version")
-          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
-            echo "::error::Could not read version from marketplace.json"
+          VERSION=$(node -e '
+            const plugins = require("./marketplace.json").plugins ?? [];
+            const versions = [...new Set(plugins.map(p => p?.version))];
+            if (versions.length !== 1 || !versions[0]) process.exit(1);
+            console.log(versions[0]);
+          ')
+          if [ -z "$VERSION" ]; then
+            echo "::error::marketplace.json must list at least one plugin and all plugins must share the same non-empty version"
             exit 1
           fi
           echo "TAG=v${VERSION}" >> "$GITHUB_ENV"

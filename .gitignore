@@ -2,5 +2,5 @@
 .idea/
 
 # Skills are vendored from jfrog/jfrog-skills only at release time (see
-# plugin/.vendor.json and scripts/sync-skills.mjs). main is skill-free.
+# plugin/.vendor.json and .github/scripts/sync-skills.mjs). main is skill-free.
 plugin/skills/

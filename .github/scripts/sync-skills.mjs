@@ -4,7 +4,8 @@
 // synced files — they live only on the release tag.
 //
 // Called by .github/workflows/release.yml. Also safe to run locally to
-// preview what a pin bump will produce;
+// preview what a pin bump will produce — plugin/skills/ is gitignored,
+// so the result is invisible to git.
 //
 // For each plugin listed in marketplace.json, this script:
 //   1. Reads <plugin>/.vendor.json to learn which repo + tag to pull.
