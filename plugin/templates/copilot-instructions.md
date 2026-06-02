@@ -275,12 +275,16 @@ npx --yes \
   --project <PROJECT>
 ```
 
-The output is a JSON array where each element has `name`,
-`packageName`, `description`, `type`, `packageVersion`, and optionally
-an inline `env[]` array of required environment variables (same shape
-as the full `--inspect` output).
+The output is a compact TSV: a header line, then one server per line,
+tab-separated: `name<TAB>type<TAB>version<TAB>description`.
+Run the command ONCE and present the rows directly as a numbered
+table - do NOT re-run it, redirect it, or parse it with `python3`/`jq`.
+The `name` column is the install identifier (the value you pass to
+`--inspect --mcp` and to install); `packageName` is NOT a separate
+column - for remote/http MCPs there is no package name, so `name` is
+the display name.
 
-3. Compare each `packageName` against the `_JF_ARGS` values
+3. Compare each `name` against the `_JF_ARGS` values
    already present in `.vscode/mcp.json` to mark each one as
    "available to install" or "already installed".
 
@@ -301,6 +305,11 @@ as the full `--inspect` output).
   `~/.jfrog/jfrogmcp.conf.json`.
 - `_JF_ARGS` MUST contain `project=<NAME>&mcp=<PACKAGE_NAME>`.
 - Package name MUST come from the catalog API. NEVER guess.
+- NEVER pipe a catalog command through `python3`, and NEVER capture it
+  with `2>&1` - `npx`/`npm` writes progress to stderr, which corrupts
+  the output stream. For `--list-available` present the compact TSV it
+  prints; for `--inspect` read the JSON it prints on stdout
+  directly (or with a single `jq` filter), never via `python3`.
 - NEVER install MCPs directly via `npx`/`pip`/`docker` - always use the
   agent guard pattern above.
 - NEVER write `"type": "sse"`, `"type": "http"`, or a top-level `"url"`
