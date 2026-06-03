@@ -12,7 +12,7 @@
 #      tag. `main` itself is never modified by CI.
 #   5. Publishes a GitHub Release pointing at the tag.
 #
-# To trigger: Actions → "Release plugin" → Run workflow. No inputs needed.
+# To trigger: Actions → "Release plugin" → Run workflow.
 
 name: Release plugin
 
@@ -46,8 +46,8 @@ jobs:
       # Vendor the skills from upstream
       # Downloads the upstream tarball at the pin declared in
       # plugin/.vendor.json (e.g. jfrog/jfrog-skills@v0.11.0) and copies
-      # its skill folders into plugin/skills/. This is the only change
-      # to the working tree before we commit.
+      # its skill folders into plugin/skills/. To ship a different skill
+      # version, bump the pin in plugin/.vendor.json via a PR.
       - name: Sync skills from upstream
         run: node .github/scripts/sync-skills.mjs
 
@@ -72,8 +72,8 @@ jobs:
 
       # Create a detached commit, tag, and push the tag
       # `git checkout --detach` lets us commit without moving `main`.
-      # We push only the tag (`origin <TAG>`), so the synced skills
-      # live exclusively on the release tag.
+      # `git add -A -f` force-stages the synced skills even though
+      # plugin/skills/ is gitignored on main.
       #
       # If the version on main was never bumped, `git push` rejects the
       # tag as "already exists" — clean failure, no force push.
@@ -82,7 +82,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --detach
-          git add -A
+          git add -A -f
           git commit -m "Release ${TAG}"
           git tag "${TAG}"
           git push origin "${TAG}"

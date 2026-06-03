@@ -8,10 +8,14 @@
 // so the result is invisible to git.
 //
 // For each plugin listed in marketplace.json, this script:
-//   1. Reads <plugin>/.vendor.json to learn which repo + tag to pull.
+//   1. Reads <plugin>/.vendor.json to learn which repo + ref to pull.
 //   2. Downloads that tarball from codeload.github.com (public, no auth).
 //   3. Extracts it into a temp directory.
 //   4. Copies the requested paths (e.g. "skills") into the plugin folder.
+//
+// The pin in .vendor.json is the single source of truth — there is no
+// runtime override. To ship a different skill version, change the pin
+// in a PR.
 
 import { promises as fs, createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
@@ -31,13 +35,12 @@ async function fileExists(filePath) {
 
 // download the upstream tarball
 
-// codeload.github.com serves any public repo's release tarball over
-// HTTPS without auth. The pin in .vendor.json is always a release tag
-// (vX.Y.Z), so we hit the /refs/tags/ URL directly — no fallback logic.
-async function downloadTarball(repo, tag, destPath) {
-  const url = `https://codeload.github.com/${repo}/tar.gz/refs/tags/${encodeURIComponent(tag)}`;
+// codeload.github.com serves any public repo's archive over HTTPS
+// without auth, accepting a tag, branch, or commit SHA as the ref.
+async function downloadTarball(repo, ref, destPath) {
+  const url = `https://codeload.github.com/${repo}/tar.gz/${encodeURIComponent(ref)}`;
   const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) throw new Error(`Could not download ${repo}@${tag} (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(`Could not download ${repo}@${ref} (HTTP ${res.status})`);
   await pipeline(Readable.fromWeb(res.body), createWriteStream(destPath));
   console.log(`  fetched ${url}`);
 }
@@ -74,10 +77,19 @@ async function copyPath(fromDir, toDir, relativePath) {
   console.log(`  ${relativePath} -> ${path.relative(process.cwd(), to)}`);
 }
 
+// Resolves the plugin's local directory from the marketplace `source` field.
+function localPluginDir(plugin) {
+  if (typeof plugin.source === "string") return plugin.source;
+  if (plugin.source && typeof plugin.source.path === "string") return plugin.source.path;
+  return null;
+}
+
 // Sync one plugin: read its .vendor.json, download + extract + copy.
-// Plugins without a .vendor.json are silently skipped.
+// Plugins without a local path or without a .vendor.json are silently skipped.
 async function syncPlugin(plugin, workDir) {
-  const pluginDir = path.resolve(plugin.source);
+  const localPath = localPluginDir(plugin);
+  if (!localPath) return;
+  const pluginDir = path.resolve(localPath);
   const vendorPath = path.join(pluginDir, ".vendor.json");
   if (!(await fileExists(vendorPath))) return;
 
@@ -86,9 +98,10 @@ async function syncPlugin(plugin, workDir) {
     throw new Error(`${vendorPath} must define 'repo', 'pin' and a non-empty 'paths' array`);
   }
 
-  console.log(`--- ${plugin.name} ---`);
-  // `slug` is just a unique filename for this plugin's tarball + extract
-  const slug = `${repo.replace("/", "-")}-${pin}`;
+  console.log(`--- ${plugin.name} (ref: ${pin}) ---`);
+
+  // `slug` is just a unique filename for this plugin's tarball + extract.
+  const slug = `${repo.replace("/", "-")}-${pin.replace(/[^A-Za-z0-9._-]/g, "_")}`;
   const tarball = path.join(workDir, `${slug}.tar.gz`);
   await downloadTarball(repo, pin, tarball);
   const extracted = await extractTarball(tarball, path.join(workDir, slug));
