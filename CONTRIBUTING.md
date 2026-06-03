@@ -10,7 +10,7 @@ All contributors must sign the [JFrog CLA](https://jfrog.com/cla/) before contri
 
 1. **Fork** the repository and create a feature branch from `main`.
 2. Make your changes, ensuring they follow the existing code style and project conventions.
-3. **Test** by loading the plugin from source — see [Option 2 in the README](README.md#option-2--install-from-source-via-the-command-palette). Run `/reload-plugins` after editing plugin files.
+3. **Test** by loading the plugin from source — see [the README](README.md#installation) for setup instructions.
 4. **Commit** with a clear, descriptive message.
 5. Open a **pull request** against `main` with a summary of what changed and why.
 
@@ -26,10 +26,10 @@ This downloads the pinned upstream tarball and replaces the contents of `plugin/
 
 ## Pre-release checklist
 
-- [ ] Version bumped in [`marketplace.json`](marketplace.json) when the plugin changes.
-- [ ] No secrets, credentials, or temporary files committed.
+- [ ] Version bumped in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) when the plugin changes.
+- [ ] No secrets, credentials, or files under `**/local-cache/` committed.
 - [ ] If the skill tree changed: `plugin/.vendor.json` `pin` matches the upstream tag the new tree was generated from.
-- [ ] Smoke-test: install the plugin locally and exercise the changed surface.
+- [ ] Smoke-test the plugin locally.
 
 ## Reporting Issues
 

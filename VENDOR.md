@@ -15,7 +15,7 @@ When the upstream repo publishes a new release, refresh the vendored tree via a 
 
 1. Bumps `pin` in [`plugin/.vendor.json`](plugin/.vendor.json) to the new tag.
 2. Re-syncs and commits the refreshed `plugin/skills/` tree.
-3. Bumps `version` in [`marketplace.json`](marketplace.json) so users actually receive the update (Claude Code/Copilot skip installs whose resolved version hasn't changed).
+3. Bumps `version` in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) so users actually receive the update (Claude Code/Copilot skip installs whose resolved version hasn't changed).
 
 To regenerate the tree locally before opening the PR:
 
