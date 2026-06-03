@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 // Vendors skill content from the upstream jfrog/jfrog-skills repository
-// into this plugin at release time. `main` itself never contains the
-// synced files — they live only on the release tag.
+// into this plugin. Run manually when bumping the pin: bump `pin` in
+// <plugin>/.vendor.json, then run this script to regenerate the
+// plugin's skills/ tree, then commit both alongside each other.
 //
-// Called by .github/workflows/release.yml. Also safe to run locally to
-// preview what a pin bump will produce — plugin/skills/ is gitignored,
-// so the result is invisible to git.
+// Usage:
+//   node .github/scripts/sync-skills.mjs
 //
-// For each plugin listed in marketplace.json, this script:
-//   1. Reads <plugin>/.vendor.json to learn which repo + ref to pull.
-//   2. Downloads that tarball from codeload.github.com (public, no auth).
-//   3. Extracts it into a temp directory.
-//   4. Copies the requested paths (e.g. "skills") into the plugin folder.
+// Steps the script performs:
+//   1. Reads marketplace.json and walks each plugin entry.
+//   2. For each plugin, reads <plugin>/.vendor.json to learn which
+//      repo + ref to pull.
+//   3. Downloads that tarball from codeload.github.com (public, no auth).
+//   4. Extracts it into a temp directory.
+//   5. Copies the requested paths (e.g. "skills") into the plugin folder,
+//      replacing any existing tree.
 //
 // The pin in .vendor.json is the single source of truth — there is no
 // runtime override. To ship a different skill version, change the pin
-// in a PR.
+// in a PR and commit the synced tree alongside it.
 
 import { promises as fs, createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
