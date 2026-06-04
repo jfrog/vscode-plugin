@@ -1,31 +1,37 @@
 #!/usr/bin/env node
 // Vendors skill content from the upstream jfrog/jfrog-skills repository
 // into this plugin. Run manually when bumping the pin: bump `pin` in
-// <plugin>/.vendor.json, then run this script to regenerate the
-// plugin's skills/ tree, then commit both alongside each other.
+// .github/scripts/sync-skills-vendor.json, then run this script to
+// regenerate the plugin's skills/ tree, then commit both alongside each
+// other.
 //
 // Usage:
 //   node .github/scripts/sync-skills.mjs
 //
 // Steps the script performs:
 //   1. Reads marketplace.json and walks each plugin entry.
-//   2. For each plugin, reads <plugin>/.vendor.json to learn which
-//      repo + ref to pull.
+//   2. Looks up the plugin's vendor entry in
+//      .github/scripts/sync-skills-vendor.json
+//      to learn which repo + ref to pull.
 //   3. Downloads that tarball from codeload.github.com (public, no auth).
 //   4. Extracts it into a temp directory.
 //   5. Copies the requested paths (e.g. "skills") into the plugin folder,
 //      replacing any existing tree.
 //
-// The pin in .vendor.json is the single source of truth — there is no
-// runtime override. To ship a different skill version, change the pin
-// in a PR and commit the synced tree alongside it.
+// The pin in sync-skills-vendor.json is the single source of truth —
+// there is no runtime override. To ship a different skill version,
+// change the pin in a PR and commit the synced tree alongside it.
 
 import { promises as fs, createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const VENDOR_FILE = path.join(SCRIPT_DIR, "sync-skills-vendor.json");
 
 // filesystem helpers
 async function readJson(filePath) {
@@ -87,20 +93,20 @@ function localPluginDir(plugin) {
   return null;
 }
 
-// Sync one plugin: read its .vendor.json, download + extract + copy.
-// Plugins without a local path or without a .vendor.json are silently skipped.
-async function syncPlugin(plugin, workDir) {
+// Sync one plugin: look up its vendor entry, download + extract + copy.
+// Plugins without a local path or without a vendor entry are silently skipped.
+async function syncPlugin(plugin, vendorMap, workDir) {
   const localPath = localPluginDir(plugin);
   if (!localPath) return;
-  const pluginDir = path.resolve(localPath);
-  const vendorPath = path.join(pluginDir, ".vendor.json");
-  if (!(await fileExists(vendorPath))) return;
+  const vendor = vendorMap[plugin.name];
+  if (!vendor) return;
 
-  const { repo, pin, paths } = await readJson(vendorPath);
+  const { repo, pin, paths } = vendor;
   if (!repo || !pin || !Array.isArray(paths) || paths.length === 0) {
-    throw new Error(`${vendorPath} must define 'repo', 'pin' and a non-empty 'paths' array`);
+    throw new Error(`vendor entry for "${plugin.name}" must define 'repo', 'pin' and a non-empty 'paths' array`);
   }
 
+  const pluginDir = path.resolve(localPath);
   console.log(`--- ${plugin.name} (ref: ${pin}) ---`);
 
   // `slug` is just a unique filename for this plugin's tarball + extract.
@@ -111,14 +117,15 @@ async function syncPlugin(plugin, workDir) {
   for (const rel of paths) await copyPath(extracted, pluginDir, rel);
 }
 
-// Entry point: walk marketplace.json, sync each plugin sequentially,
-// always clean up the temp work directory.
+// Entry point: load vendor map + marketplace.json, sync each plugin
+// sequentially, always clean up the temp work directory.
 async function main() {
   const marketplace = await readJson("marketplace.json");
+  const vendorMap = await readJson(VENDOR_FILE);
   const workDir = await fs.mkdtemp(path.join(tmpdir(), "sync-skills-"));
   try {
     for (const plugin of marketplace.plugins ?? []) {
-      await syncPlugin(plugin, workDir);
+      await syncPlugin(plugin, vendorMap, workDir);
     }
   } finally {
     await fs.rm(workDir, { recursive: true, force: true });

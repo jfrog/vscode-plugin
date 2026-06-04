@@ -16,7 +16,7 @@ All contributors must sign the [JFrog CLA](https://jfrog.com/cla/) before contri
 
 ### Updating the vendored skills
 
-The `plugin/skills/` tree is vendored from [jfrog/jfrog-skills](https://github.com/jfrog/jfrog-skills) and committed to `main` — see [`VENDOR.md`](VENDOR.md) for the full flow. To regenerate the tree locally against the pin in [`plugin/.vendor.json`](plugin/.vendor.json):
+The `plugin/skills/` tree is vendored from [jfrog/jfrog-skills](https://github.com/jfrog/jfrog-skills) and committed to `main` — see [`VENDOR.md`](VENDOR.md) for the full flow. To regenerate the tree locally against the pin in [`.github/scripts/sync-skills-vendor.json`](.github/scripts/sync-skills-vendor.json):
 
 ```bash
 node .github/scripts/sync-skills.mjs
@@ -28,7 +28,7 @@ This downloads the pinned upstream tarball and replaces the contents of `plugin/
 
 - [ ] Version bumped in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) when the plugin changes.
 - [ ] No secrets, credentials, or files under `**/local-cache/` committed.
-- [ ] If the skill tree changed: `plugin/.vendor.json` `pin` matches the upstream tag the new tree was generated from.
+- [ ] If the skill tree changed: `.github/scripts/sync-skills-vendor.json` `pin` matches the upstream tag the new tree was generated from.
 - [ ] Smoke-test the plugin locally.
 
 ## Reporting Issues
