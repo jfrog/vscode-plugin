@@ -16,6 +16,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 | Component | Feature | Description |
 | --- | --- | --- |
 | **Hook** | Agent Guard | Copilot manage MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
+| **Skills** | JFrog Platform skills | Bundled [JFrog skills](https://github.com/jfrog/jfrog-skills) that teach Copilot how to interact with the JFrog Platform via the JFrog CLI, JFrog MCP server, and REST/GraphQL APIs — including a package safety and download workflow that consults the JFrog Public Catalog and curation policy before fetching packages. |
 
 ---
 
@@ -136,6 +137,25 @@ See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, coding conventions, and the pull-request process.
+
+## Updating the vendored skills
+
+The `plugin/skills/` tree is vendored from [`jfrog/jfrog-skills`](https://github.com/jfrog/jfrog-skills) at the version pinned in [`.github/scripts/sync-skills-vendor.json`](.github/scripts/sync-skills-vendor.json). To pull a newer upstream release into this repo:
+
+1. Bump `pin` in `.github/scripts/sync-skills-vendor.json` to the new tag (e.g. `v0.12.0`).
+2. Run the sync script from the repo root:
+
+   ```bash
+   node .github/scripts/sync-skills.mjs
+   ```
+
+   It downloads the pinned tarball from `codeload.github.com`, extracts it, and replaces the directories listed in `paths` (today: `plugin/skills/`).
+3. Bump `version` in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) so users actually receive the update — Claude Code skips installs whose resolved version hasn't changed.
+4. Commit the pin bump, the regenerated `plugin/skills/` tree, and the version bump together, and open a PR.
+
+See [`VENDOR.md`](VENDOR.md) for the full picture.
+
+---
 
 ## Security
 

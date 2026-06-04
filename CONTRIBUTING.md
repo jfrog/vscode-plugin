@@ -16,13 +16,7 @@ All contributors must sign the [JFrog CLA](https://jfrog.com/cla/) before contri
 
 ### Updating the vendored skills
 
-The `plugin/skills/` tree is vendored from [jfrog/jfrog-skills](https://github.com/jfrog/jfrog-skills) and committed to `main` — see [`VENDOR.md`](VENDOR.md) for the full flow. To regenerate the tree locally against the pin in [`.github/scripts/sync-skills-vendor.json`](.github/scripts/sync-skills-vendor.json):
-
-```bash
-node .github/scripts/sync-skills.mjs
-```
-
-This downloads the pinned upstream tarball and replaces the contents of `plugin/skills/`. Commit the result alongside any pin/version bumps.
+The `plugin/skills/` tree is vendored from [jfrog/jfrog-skills](https://github.com/jfrog/jfrog-skills) and committed to `main`. The full refresh flow lives in [`README.md`](README.md#updating-the-vendored-skills) and [`VENDOR.md`](VENDOR.md).
 
 ## Pre-release checklist
 
