@@ -290,6 +290,12 @@ the display name.
 
 ## Key Rules
 
+- **Package scope is case-sensitive — ALWAYS write it lowercase as
+  `@jfrog/agent-guard`, NEVER `@JFrog/agent-guard`.** npm scopes are
+  case-sensitive; the published package is the lowercase
+  `@jfrog/agent-guard`. Capitalizing the brand (`@JFrog`) points at a
+  different/nonexistent scope and breaks the command. Use the exact
+  lowercase string in every command and config entry.
 - **`npx` argument order (required):** `--yes`, `--registry <URL>`,
   `@jfrog/agent-guard`, then the agent guard flags (`--inspect`,
   `--login`, `--list-available`, or `--server <SERVER_ID>` for loader
