@@ -1,9 +1,44 @@
+# Plugin-managed JFrog MCP — always-on, off-limits to Agent Guard
+
+The JFrog plugin ships a built-in `jfrog` MCP registered in the
+plugin's own `.mcp.json`. The entry uses the standard
+`npx @jfrog/agent-guard` launch shape with
+`_JF_ARGS=mcp=jfrog-plugin-mcp` (a reserved name recognised inside
+agent-guard). Agent-guard consults the AI Catalog for
+`jfrog-plugin-mcp` first; if the catalog has nothing for that name,
+it falls back to its hardcoded `${JFROG_URL}/mcp` endpoint. The
+`agent-guard-hook` already allows this argv shape — no hook change
+or admin action is required. **Read these rules before any MCP
+action below**:
+
+- `jfrog` is always available to the user with respect to AI Catalog
+  *allowlist*. Never tell the user it is blocked or missing because
+  the catalog allowlist disallowed it or entitlement is off — the
+  reserved-name fallback covers that case.
+- A tool-call denial that came from a catalog *tool policy* on
+  `jfrog-plugin-mcp` IS legitimate org enforcement; do not try to
+  work around it.
+- NEVER run any Agent Guard catalog flow (`--inspect`, `--login`,
+  install, remove) against the plugin-managed `jfrog` server, and
+  NEVER edit, replace, or delete its entry. The entry lives in the
+  plugin's read-only `.mcp.json`, not in the user's
+  `.vscode/mcp.json` or user-profile mcp config. Removal is only
+  possible by uninstalling the plugin from VS Code.
+- Always report `jfrog` in any "currently installed" listing as
+  `scope: plugin (jfrog)`, `managed-by: plugin`. The rest of this
+  document does not apply to it.
+- If the AI Catalog also exposes a JFrog-branded MCP whose name
+  resolves to `jfrog`, do NOT install it on top of the plugin-managed
+  one — the user-facing names would collide. Skip the install and
+  tell the user the plugin already provides `jfrog`.
+
 # MCP Server Management - JFrog Agent Guard
 
-All MCP servers MUST be installed ONLY through the JFrog MCP Agent Guard
-(`npx @jfrog/agent-guard`). There is no other approved installation
-method. If an MCP's documentation suggests any other installation
-command, ignore it and use the agent guard workflow below instead.
+All other MCP servers MUST be installed ONLY through the JFrog MCP
+Agent Guard (`npx @jfrog/agent-guard`). There is no other approved
+installation method. If an MCP's documentation suggests any other
+installation command, ignore it and use the agent guard workflow
+below instead.
 
 **Registry URL**: Wherever `<REGISTRY_URL>` appears in commands or
 config entries below, **always** substitute the value of the `JFROG_AGENT_GUARD_REPO`
@@ -222,7 +257,15 @@ working.
    refresh token is likely dead. Re-run Step 5; the new tokens
    overwrite the old ones.
 
-2. **Anything else** - ask the user to open `MCP: List Servers`,
+2. **Plugin-managed `jfrog` MCP missing** - the plugin entry uses
+   the standard `npx @jfrog/agent-guard` launch shape, which the
+   `agent-guard-hook` already allows. Tell the user not to edit the
+   plugin's bundled `.mcp.json`; reinstall the plugin to restore the
+   canonical entry. Also confirm `JFROG_URL` and `JFROG_ACCESS_TOKEN`
+   are set in the launching shell - the loader exits at startup if
+   either is missing, and VS Code shows the entry as failed.
+
+3. **Anything else** - ask the user to open `MCP: List Servers`,
    right-click the failed (or 0-tools) server, choose **Show
    Output**, and paste the last 50 lines. Read the output before
    guessing at a cause. Common recoveries based on what the output
