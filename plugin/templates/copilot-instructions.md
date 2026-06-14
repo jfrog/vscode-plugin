@@ -1,39 +1,28 @@
-# Plugin-managed JFrog MCP — always-on, off-limits to Agent Guard
+# Built-in `jfrog` MCP
 
-The JFrog plugin ships a built-in `jfrog` MCP registered in the
-plugin's own `.mcp.json`. The entry uses the standard
-`npx @jfrog/agent-guard` launch shape with
-`_JF_ARGS=mcp=jfrog-plugin-mcp` and **no project**. That exact
-combination — reserved name + no project — tells agent-guard to
-skip the AI Catalog entirely and connect directly to
-`${JFROG_URL}/mcp` with `Authorization: Bearer ${JFROG_ACCESS_TOKEN}`.
-The `agent-guard-hook` already allows this argv shape — no hook
-change or admin action is required. **Read these rules before any
-MCP action below**:
+The plugin ships a built-in `jfrog` MCP in its read-only `.mcp.json`,
+launched as `npx @jfrog/agent-guard` with `_JF_ARGS=mcp=jfrog-mcp`.
+agent-guard recognizes that shape, skips the AI Catalog, and connects
+directly to `${JFROG_URL}/mcp`. **Hard rules** (apply before any MCP
+action below):
 
-- `jfrog` is always available to the user; it does not depend on AI
-  Catalog entitlement or any allowlist. Never tell the user it is
-  blocked or missing for catalog/entitlement reasons.
+- `jfrog` is always available; never tell the user it's blocked,
+  missing, or pending because of catalog/entitlement.
 - NEVER run any Agent Guard catalog flow (`--inspect`, `--login`,
-  install, remove) against the plugin-managed `jfrog` server, and
-  NEVER edit, replace, or delete its entry. The entry lives in the
-  plugin's read-only `.mcp.json`, not in the user's
-  `.vscode/mcp.json` or user-profile mcp config. Removal is only
-  possible by uninstalling the plugin from VS Code.
-- Always report `jfrog` in any "currently installed" listing as
+  install, remove) against `jfrog`, and NEVER edit or delete its
+  entry. Removal is only possible by uninstalling the plugin from
+  VS Code.
+- In any "currently installed" listing, report `jfrog` as
   `scope: plugin (jfrog)`, `managed-by: plugin`. The rest of this
   document does not apply to it.
-- If the AI Catalog also exposes a JFrog-branded MCP whose name
-  resolves to `jfrog`, do NOT install it on top of the plugin-managed
-  one — the user-facing names would collide. Skip the install and
-  tell the user the plugin already provides `jfrog`.
-- Tool calls hitting the plugin-managed `jfrog` are constrained by
-  the JFrog access token's permissions on the platform, not by an
-  AI Catalog tool policy. To enforce a catalog-managed tool policy
-  on this name, an admin can publish `jfrog-plugin-mcp` in the AI
-  Catalog and have users invoke it the standard way (i.e. with a
-  `project` in `_JF_ARGS`); that path goes through the catalog
-  like any other MCP.
+- If the AI Catalog also exposes an MCP whose name resolves to
+  `jfrog`, do NOT install it — names would collide. Skip and tell
+  the user the plugin already provides `jfrog`.
+- Tool calls on `jfrog` are constrained by the JFrog access token,
+  not by AI Catalog tool policy. To enforce catalog-managed policy
+  on this name, an admin publishes `jfrog-mcp` in the AI Catalog and
+  users invoke it with a `project` in `_JF_ARGS` (standard catalog
+  flow).
 
 # MCP Server Management - JFrog Agent Guard
 
@@ -260,13 +249,12 @@ working.
    refresh token is likely dead. Re-run Step 5; the new tokens
    overwrite the old ones.
 
-2. **Plugin-managed `jfrog` MCP missing** - the plugin entry uses
-   the standard `npx @jfrog/agent-guard` launch shape, which the
-   `agent-guard-hook` already allows. Tell the user not to edit the
-   plugin's bundled `.mcp.json`; reinstall the plugin to restore the
-   canonical entry. Also confirm `JFROG_URL` and `JFROG_ACCESS_TOKEN`
-   are set in the launching shell - the loader exits at startup if
-   either is missing, and VS Code shows the entry as failed.
+2. **Built-in `jfrog` MCP missing** - almost always either
+   `JFROG_URL` / `JFROG_ACCESS_TOKEN` unset (it fails fast at
+   startup; the entry shows as failed in **MCP: List Servers**), or
+   the launch shape is blocked by an admin policy. Tell the user
+   not to edit the plugin's bundled `.mcp.json`; reinstall the
+   plugin to restore the entry.
 
 3. **Anything else** - ask the user to open `MCP: List Servers`,
    right-click the failed (or 0-tools) server, choose **Show
