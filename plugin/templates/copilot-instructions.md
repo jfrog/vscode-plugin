@@ -22,13 +22,16 @@ is set. Otherwise use
   NEVER resolve the catalog locally; the catalog, headers, and required
   inputs change between prompts. (Applies to these catalog/registry
   fetches only — `--list-available` and `--inspect`; NOT `--login`,
-  which would re-open the OAuth browser, and NOT reading `.vscode/mcp.json`
-  for *installed* state.)
+  which would re-open the OAuth browser, and NOT reading local config
+  files for *installed* state.)
 
 - **`<PROJECT>` is always mandatory.** Resolve via Step 1's project
   chain: existing `servers` entries (`_JF_ARGS` → `project=`) →
-  `JF_PROJECT` env var → ASK the user. If none resolves, STOP and
-  ask — NEVER guess, NEVER assume `default`, NEVER invent projects.
+  `JF_PROJECT` env var → ASK the user. Exception: when the user
+  EXPLICITLY asks to switch project or re-sync the configuration, the
+  project they name (or the current `JF_PROJECT`) takes priority over
+  existing `_JF_ARGS`. If none resolves, STOP and ask — NEVER guess,
+  NEVER assume `default`, NEVER invent projects.
 
 - **`<SERVER_ID>` is auto-resolvable.** Resolve via Step 1's server
   chain: existing `servers` entries (value after `--server` in
