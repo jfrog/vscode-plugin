@@ -285,8 +285,8 @@ to start and actually expose tools.
 ### Step 5: Authenticate OAuth MCPs (auto, after Step 4)
 
 Run ONLY for OAuth-style remote MCPs — i.e. `--inspect` showed a
-`remote` section AND Step 4 wrote no `${input:...}` auth header into
-`env` (no static token). Skip for local MCPs and for remote MCPs whose
+`remote` section with `type: "http"` AND Step 4 wrote no `${input:...}`
+auth header into `env` (no static token). Skip for local MCPs and for remote MCPs whose
 auth comes from a static token configured via `inputs`.
 
 `--login` opens the browser, runs OAuth, caches tokens in
