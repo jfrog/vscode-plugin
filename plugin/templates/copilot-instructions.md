@@ -118,12 +118,6 @@ are used: Do NOT pass `--server <ID>`
    NEVER infer the project from other sources, NEVER make up projects,
    ALWAYS ask.
 
-When the user EXPLICITLY asks to switch project or update/re-sync the
-configuration (e.g. "update my MCP configuration" after changing
-`JF_PROJECT`), the current `JF_PROJECT` (or the project they name)
-takes priority over the existing `_JF_ARGS`: re-write the `project=`
-value in every affected `servers` entry to match.
-
 **Target config file**
 
 - **Default: `.vscode/mcp.json` in the workspace root.** Create it if
@@ -250,11 +244,13 @@ Rules for the `inputs` block:
 - `type` is always `"promptString"`.
 - `password: true` for secret inputs (catalog `isSecret=true`) — hides
   the characters VS Code shows while typing and stores the value
-  encrypted. OMIT `password` for non-secret values like URLs or flags
-  (VS Code still prompts, but does not mask the typing).
+  encrypted. OMIT the `password` key entirely (never set it to `false`)
+  for non-secret values like URLs or flags (VS Code still prompts, but
+  does not mask the typing).
 - `description` shows in the VS Code prompt — use the catalog's
-  `description` field.
-- Reference the input from `env` with `"${input:<id>}"`. For HTTP
+  `description` field. If the catalog leaves the description as an empty 
+  string `""`, construct a brief context-appropriate description instead.
+- Reference the input from `env` with `"${input:<id>}"`.For HTTP
   headers with a `Bearer` prefix, either put the prefix in the
   description and ask the user to include it, or use
   `"Bearer ${input:<id>}"` and ask only for the token.
