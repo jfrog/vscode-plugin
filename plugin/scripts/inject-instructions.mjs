@@ -2,7 +2,7 @@
 // Copyright (c) JFrog Ltd. 2026
 // Licensed under the Apache License, Version 2.0
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -22,30 +22,12 @@ const env = (newName, oldName) =>
 const forceDisabled =
     env("_JF_AGENT_GUARD_FORCE_DISABLE", "_JF_MCP_GATEWAY_FORCE_DISABLE") === "true";
 const forceEnabled =
-    env("JF_AGENT_GUARD_FORCE_ENABLE", "JF_MCP_GATEWAY_FORCE_ENABLE") === "true";
-
-/**
- * Parses process arguments to extract the value of the `--server` flag.
- * Supports both `--server=my-id` and `--server my-id`.
- */
-function getServerFlagValue() {
-  const args = process.argv;
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith("--server=")) {
-      return args[i].split("=")[1];
-    }
-    if (args[i] === "--server" && i + 1 < args.length) {
-      return args[i + 1];
-    }
-  }
-  return null;
-}
+    env("_JF_AGENT_GUARD_FORCE_ENABLE", "_JF_MCP_GATEWAY_FORCE_ENABLE") === "true";
 
 /**
  * Resolve {baseUrl, token} following strict authentication precedence:
- * 1. The --server flag (matched against profiles in the JF CLI config)
- * 2. Environment variables (JFROG_URL/JF_URL and JFROG_ACCESS_TOKEN/JF_ACCESS_TOKEN)
- * 3. Configuration File created by the JF CLI (~/.jfrog/jfrog-cli.conf.v6)
+ * 1. Environment variables (JFROG_URL/JF_URL and JFROG_ACCESS_TOKEN/JF_ACCESS_TOKEN)
+ * 2. Configuration File created by the JF CLI (~/.jfrog/jfrog-cli.conf.v6)
  *    a. Profile marked isDefault: true
  *    b. The only profile that exists (if exactly one is defined)
  */
@@ -61,20 +43,7 @@ function resolveCredentials() {
 
   const servers = Array.isArray(conf?.servers) ? conf.servers.filter((s) => s.url && s.accessToken) : [];
 
-  // Priority 1: --server flag
-  const serverFlagId = getServerFlagValue();
-  if (serverFlagId) {
-    debug(`--server flag detected with value: "${serverFlagId}". Searching config...`);
-    const flaggedProfile = servers.find((s) => s.serverId === serverFlagId);
-    if (flaggedProfile) {
-      debug(`Resolved credentials via --server flag using profile: ${flaggedProfile.serverId}`);
-      return { baseUrl: flaggedProfile.url, token: flaggedProfile.accessToken };
-    }
-    debug(`Warning: --server flag specified ID "${serverFlagId}" but no matching profile was found in config.`);
-    // Fall through to next authentication method
-  }
-
-  // Priority 2: Environment variables
+  // Priority 1: Environment variables
   const baseUrl = env("JFROG_URL", "JF_URL");
   const token = env("JFROG_ACCESS_TOKEN", "JF_ACCESS_TOKEN");
   if (baseUrl && token) {
@@ -82,20 +51,20 @@ function resolveCredentials() {
     return { baseUrl, token };
   }
 
-  // If config file couldn't be loaded/parsed earlier, we can't proceed with priorities 3 & 4
+  // If config file couldn't be loaded/parsed earlier, we can't proceed with priorities 2.a & 2.b
   if (!conf || servers.length === 0) {
     debug("No server profiles available via JF CLI config; authentication resolution failed.");
     return null;
   }
 
-  // Priority 3: Default profile in config
+  // Priority 2.a: Default profile in config
   let profile = servers.find((s) => s.isDefault);
   if (profile) {
     debug(`Resolved credentials using default profile: ${profile.serverId}`);
     return { baseUrl: profile.url, token: profile.accessToken };
   }
 
-  // Priority 4: The only profile that exists
+  // Priority 2.b: The only profile that exists
   if (servers.length === 1) {
     profile = servers[0];
     debug(`Resolved credentials using the single available profile: ${profile.serverId}`);
@@ -119,8 +88,11 @@ async function isGatewayEnabledViaSettings() {
 
   debug(`Fetching gateway setting from ${url}`);
 
+  // Cap the worst-case session-start delay when the JFrog server is slow or
+  // unreachable; the check fails closed on timeout.
+  const SETTINGS_TIMEOUT_MS = 3000;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), SETTINGS_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
       method: "GET",
@@ -167,11 +139,31 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let template;
 try {
   template = readFileSync(
-    path.join(root, "templates", "jfrog-mcp-management.md"),
+    path.join(root, "templates", "copilot-instructions.md"),
     "utf8",
   );
-} catch {
+} catch (error) {
+  debug(`Could not read instructions template: ${error.message}`);
   process.exit(0);
+}
+
+// Materialize the template into the workspace at .github/copilot-instructions.md,
+// which is the file VS Code / GitHub Copilot actually reads. This mirrors the
+// legacy ensure-instructions scripts and is the primary delivery path for
+// Copilot; the additionalContext payload below additionally covers Claude Code
+// sessions. Only write when absent so we never clobber a user-edited file.
+try {
+  const targetDir = path.join(process.cwd(), ".github");
+  const targetFile = path.join(targetDir, "copilot-instructions.md");
+  if (!existsSync(targetFile)) {
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(targetFile, template, "utf8");
+    debug(`Wrote instructions to ${targetFile}`);
+  } else {
+    debug(`Instructions already present at ${targetFile}; leaving as-is`);
+  }
+} catch (error) {
+  debug(`Failed to write .github/copilot-instructions.md: ${error.message}`);
 }
 
 process.stdout.write(
