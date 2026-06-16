@@ -3,6 +3,7 @@
 // Licensed under the Apache License, Version 2.0
 
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -23,18 +24,95 @@ const forceDisabled =
 const forceEnabled =
     env("JF_AGENT_GUARD_FORCE_ENABLE", "JF_MCP_GATEWAY_FORCE_ENABLE") === "true";
 
-async function isGatewayEnabledViaSettings() {
-  const baseUrl = env("JFROG_URL", "JF_URL");
-  const token = env("JFROG_ACCESS_TOKEN", "JF_ACCESS_TOKEN");
-  if (!baseUrl) {
-    debug("JFROG_URL/JF_URL is not set; skipping settings check");
-    return false;
+/**
+ * Parses process arguments to extract the value of the `--server` flag.
+ * Supports both `--server=my-id` and `--server my-id`.
+ */
+function getServerFlagValue() {
+  const args = process.argv;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith("--server=")) {
+      return args[i].split("=")[1];
+    }
+    if (args[i] === "--server" && i + 1 < args.length) {
+      return args[i + 1];
+    }
   }
-  if (!token) {
-    debug("JFROG_ACCESS_TOKEN/JF_ACCESS_TOKEN is not set; skipping settings check");
-    return false;
+  return null;
+}
+
+/**
+ * Resolve {baseUrl, token} following strict authentication precedence:
+ * 1. The --server flag (matched against profiles in the JF CLI config)
+ * 2. Environment variables (JFROG_URL/JF_URL and JFROG_ACCESS_TOKEN/JF_ACCESS_TOKEN)
+ * 3. Configuration File created by the JF CLI (~/.jfrog/jfrog-cli.conf.v6)
+ *    a. Profile marked isDefault: true
+ *    b. The only profile that exists (if exactly one is defined)
+ */
+function resolveCredentials() {
+  // Read and parse JF CLI config safely, as multiple layers depend on it
+  const confPath = path.join(os.homedir(), ".jfrog", "jfrog-cli.conf.v6");
+  let conf = null;
+  try {
+    conf = JSON.parse(readFileSync(confPath, "utf8"));
+  } catch (error) {
+    debug(`Could not read or parse JF CLI config at ${confPath}: ${error.message}`);
   }
 
+  const servers = Array.isArray(conf?.servers) ? conf.servers.filter((s) => s.url && s.accessToken) : [];
+
+  // Priority 1: --server flag
+  const serverFlagId = getServerFlagValue();
+  if (serverFlagId) {
+    debug(`--server flag detected with value: "${serverFlagId}". Searching config...`);
+    const flaggedProfile = servers.find((s) => s.serverId === serverFlagId);
+    if (flaggedProfile) {
+      debug(`Resolved credentials via --server flag using profile: ${flaggedProfile.serverId}`);
+      return { baseUrl: flaggedProfile.url, token: flaggedProfile.accessToken };
+    }
+    debug(`Warning: --server flag specified ID "${serverFlagId}" but no matching profile was found in config.`);
+    // Fall through to next authentication method
+  }
+
+  // Priority 2: Environment variables
+  const baseUrl = env("JFROG_URL", "JF_URL");
+  const token = env("JFROG_ACCESS_TOKEN", "JF_ACCESS_TOKEN");
+  if (baseUrl && token) {
+    debug("Resolved credentials from environment variables");
+    return { baseUrl, token };
+  }
+
+  // If config file couldn't be loaded/parsed earlier, we can't proceed with priorities 3 & 4
+  if (!conf || servers.length === 0) {
+    debug("No server profiles available via JF CLI config; authentication resolution failed.");
+    return null;
+  }
+
+  // Priority 3: Default profile in config
+  let profile = servers.find((s) => s.isDefault);
+  if (profile) {
+    debug(`Resolved credentials using default profile: ${profile.serverId}`);
+    return { baseUrl: profile.url, token: profile.accessToken };
+  }
+
+  // Priority 4: The only profile that exists
+  if (servers.length === 1) {
+    profile = servers[0];
+    debug(`Resolved credentials using the single available profile: ${profile.serverId}`);
+    return { baseUrl: profile.url, token: profile.accessToken };
+  }
+
+  debug("Authentication resolution failed: Multiple profiles exist but none are marked default.");
+  return null;
+}
+
+async function isGatewayEnabledViaSettings() {
+  const credentials = resolveCredentials();
+  if (!credentials) {
+    debug("No credentials resolved; skipping settings check");
+    return false;
+  }
+  const { baseUrl, token } = credentials;
   const url =
       baseUrl.replace(/\/+$/, "") +
       "/ml/core/api/v1/administration/account-settings/mcp_gateway_plugin_enabled";
