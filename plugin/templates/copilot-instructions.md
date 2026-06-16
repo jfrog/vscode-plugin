@@ -295,8 +295,9 @@ npx --yes \
   --mcp <spec.packageName>
 ```
 
-Note: This may require full network access when run in a
-restricted/sandboxed environment.
+Note: `--login` launches the system browser and runs a local OAuth
+callback server, so in a restricted/sandboxed environment it needs full
+(unrestricted) permissions — network access alone is not enough.
 
 Outcomes:
 
