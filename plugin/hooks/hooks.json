@@ -1,10 +1,13 @@
 {
   "hooks": {
-    "sessionStart": [
+    "SessionStart": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-instructions.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File ${CLAUDE_PLUGIN_ROOT}/scripts/ensure-instructions.ps1"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/inject-instructions.mjs\""
+          }
+        ]
       }
     ]
   }
