@@ -250,11 +250,14 @@ working.
    overwrite the old ones.
 
 2. **Built-in `jfrog` MCP missing** - almost always either
-   `JFROG_URL` / `JFROG_ACCESS_TOKEN` unset (it fails fast at
-   startup; the entry shows as failed in **MCP: List Servers**), or
-   the launch shape is blocked by an admin policy. Tell the user
-   not to edit the plugin's bundled `.mcp.json`; reinstall the
-   plugin to restore the entry.
+   `JFROG_URL` / `JFROG_ACCESS_TOKEN` not exported in the launching
+   shell (agent-guard reads them from the shell for the plugin's
+   bundled `jfrog` entry — they MUST NEVER be added to any
+   `mcp.json` `env` block, including the bundled one; agent-guard
+   fails fast at startup and the entry shows as failed in **MCP:
+   List Servers**), or the launch shape is blocked by an admin
+   policy. Tell the user not to edit the plugin's bundled
+   `.mcp.json`; reinstall the plugin to restore the entry.
 
 3. **Anything else** - ask the user to open `MCP: List Servers`,
    right-click the failed (or 0-tools) server, choose **Show
