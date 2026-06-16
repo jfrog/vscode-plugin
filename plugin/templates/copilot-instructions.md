@@ -27,11 +27,8 @@ is set. Otherwise use
 
 - **`<PROJECT>` is always mandatory.** Resolve via Step 1's project
   chain: existing `servers` entries (`_JF_ARGS` → `project=`) →
-  `JF_PROJECT` env var → ASK the user. Exception: when the user
-  EXPLICITLY asks to switch project or re-sync the configuration, the
-  project they name (or the current `JF_PROJECT`) takes priority over
-  existing `_JF_ARGS`. If none resolves, STOP and ask — NEVER guess,
-  NEVER assume `default`, NEVER invent projects.
+  `JF_PROJECT` env var → ASK the user. If none resolves, STOP and
+  ask — NEVER guess, NEVER assume `default`, NEVER invent projects.
 
 - **`<SERVER_ID>` is auto-resolvable.** Resolve via Step 1's server
   chain: existing `servers` entries (value after `--server` in
@@ -104,11 +101,10 @@ unless absolutely necessary:
    ask the user to either run `jf c add <ID>` or export
    `JFROG_URL` + `JFROG_ACCESS_TOKEN`, then retry.
 
-NEVER try multiple servers — pick one. Once chosen, pass it
-If a server from the jf cli configuration is supposed to be used:
-Always explicitly as `--server <ID>` in every agent guard invocation.
-Otherwise, if environment variables for `JFROG_URL` and `JFROG_ACCESS_TOKEN`
-are used: Do NOT pass `--server <ID>`
+NEVER try multiple servers — pick one. Once chosen: if using a jf CLI
+server, always pass it explicitly as `--server <ID>` in every agent
+guard invocation; if using `JFROG_URL` + `JFROG_ACCESS_TOKEN` instead,
+do NOT pass `--server <ID>`.
 
 **Project**
 
@@ -248,9 +244,9 @@ Rules for the `inputs` block:
   for non-secret values like URLs or flags (VS Code still prompts, but
   does not mask the typing).
 - `description` shows in the VS Code prompt — use the catalog's
-  `description` field. If the catalog leaves the description as an empty 
+  `description` field. If the catalog leaves the description as an empty
   string `""`, construct a brief context-appropriate description instead.
-- Reference the input from `env` with `"${input:<id>}"`.For HTTP
+- Reference the input from `env` with `"${input:<id>}"`. For HTTP
   headers with a `Bearer` prefix, either put the prefix in the
   description and ask the user to include it, or use
   `"Bearer ${input:<id>}"` and ask only for the token.
@@ -323,9 +319,6 @@ Outcomes:
    server from `MCP: List Servers` so the removed entry stops loading
    (the config is read at session start only).
 
-Before removing, check Managed Settings — if the target MCP is
-protected, do NOT remove it (see "Managed Settings").
-
 ## Listing MCPs
 
 **Route the request first** — pick which subsection to run BEFORE
@@ -393,23 +386,6 @@ the display name.
    (compare against `mcp=` in `_JF_ARGS`). Present the available
    (not-yet-installed) MCPs, and also show which ones are already
    installed so the user has the full picture.
-
-## Managed Settings
-
-Managed settings (`managed-settings.json`) can enforce
-organization-level policy. When managed settings are in effect, they
-override everything below and CANNOT be bypassed:
-
-- **Agent-guard-only installation is enforced.** If the user asks to
-  install an MCP by any other means (`npm install`, `pip`, `docker`,
-  hand-editing `.vscode/mcp.json` with a direct `url`/`http`/`sse`
-  entry, etc.), BLOCK it immediately, run nothing, and respond
-  conversationally that all MCP installations must go through the
-  JFrog Agent Guard.
-- **Protected MCPs cannot be removed.** If the target of a removal is
-  protected by managed settings, BLOCK the uninstall immediately and
-  respond conversationally that the MCP is protected by managed
-  settings and cannot be removed. Do not edit any config file.
 
 ## Key Rules
 
