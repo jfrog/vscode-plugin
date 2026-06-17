@@ -3,7 +3,7 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -130,16 +130,38 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let template;
 try {
   template = readFileSync(
-    path.join(root, "templates", "jfrog-mcp-management.md"),
+    path.join(root, "templates", "copilot-instructions.md"),
     "utf8",
   );
-} catch {
-  process.stdout.write("{}");
+} catch (error) {
+  debug(`Could not read instructions template: ${error.message}`);
   process.exit(0);
+}
+
+// Materialize the template into the workspace at .github/copilot-instructions.md,
+// which is the file VS Code / GitHub Copilot actually reads. This mirrors the
+// legacy ensure-instructions scripts and is the primary delivery path for
+// Copilot; the additionalContext payload below additionally covers Claude Code
+// sessions. Only write when absent so we never clobber a user-edited file.
+try {
+  const targetDir = path.join(process.cwd(), ".github");
+  const targetFile = path.join(targetDir, "copilot-instructions.md");
+  if (!existsSync(targetFile)) {
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(targetFile, template, "utf8");
+    debug(`Wrote instructions to ${targetFile}`);
+  } else {
+    debug(`Instructions already present at ${targetFile}; leaving as-is`);
+  }
+} catch (error) {
+  debug(`Failed to write .github/copilot-instructions.md: ${error.message}`);
 }
 
 process.stdout.write(
   JSON.stringify({
-    additional_context: template,
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: template,
+    },
   }),
 );
