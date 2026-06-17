@@ -83,9 +83,9 @@ unless absolutely necessary:
 
 **Server ID**
 
-1. Any existing `servers` entry in the user-level `~/.vscode/mcp.json`
-   or the workspace `.vscode/mcp.json` — take the value after `--server`
-   in `args`.
+1. Any existing `servers` entry in the workspace `.vscode/mcp.json` or
+   the VS Code user-level MCP config (`MCP: Open User Configuration`) —
+   take the value after `--server` in `args`.
 2. Else `JFROG_URL` env var set (with `JFROG_ACCESS_TOKEN`) — the
    agent guard can resolve credentials from these directly;
    DO NOT pass `--server` as that would make the agent guard try to
@@ -116,14 +116,17 @@ do NOT pass `--server <ID>`.
 
 **Target config file**
 
-- **Default: the user-level `~/.vscode/mcp.json`**
-  (`%USERPROFILE%\.vscode\mcp.json` on Windows). Create it if missing
-  (`{ "servers": {}, "inputs": [] }`). Servers here are available across
-  all workspaces.
-- Use the workspace **`.vscode/mcp.json`** ONLY if the user says "for
-  this project" / "commit" / "share with the team" (shareable via git).
-  When installing there, write exclusively to the workspace file — do
-  NOT touch `~/.vscode/mcp.json`.
+- **Default: `.vscode/mcp.json` in the workspace root.** Create it if
+  missing (`{ "servers": {}, "inputs": [] }`). Shareable via git.
+- Use the VS Code **user-level MCP config** (`MCP: Open User
+  Configuration`) ONLY if the user says "globally" / "personal only" /
+  "do not commit". It lives in the VS Code profile folder:
+  - macOS: `~/Library/Application Support/Code/User/mcp.json`
+  - Linux: `~/.config/Code/User/mcp.json`
+  - Windows: `%APPDATA%\Code\User\mcp.json`
+
+  When installing globally, write exclusively to the user-level config —
+  do NOT touch the workspace `.vscode/mcp.json`.
 - Do not ask which scope unless the user brings it up.
 
 ### Step 2: Inspect the MCP in the catalog
@@ -191,7 +194,7 @@ Split Step 2 inputs by `isRequired`:
 ### Step 4: Write the config entry
 
 Add the entry under `servers` in the target config (default
-`~/.vscode/mcp.json` — see Step 1), and declare every input you are
+`.vscode/mcp.json` — see Step 1), and declare every input you are
 configuring under the top-level `inputs` array. **Secrets MUST use
 `${input:...}` substitution — never write a raw secret value into the
 JSON file.**
