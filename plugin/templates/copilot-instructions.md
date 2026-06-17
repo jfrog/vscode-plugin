@@ -83,8 +83,9 @@ unless absolutely necessary:
 
 **Server ID**
 
-1. Any existing `servers` entry in `~/.vscode/mcp.json` — take the value
-   after `--server` in `args`.
+1. Any existing `servers` entry in the workspace `.vscode/mcp.json` or
+   the user-profile `mcp.json` (open via `MCP: Open User Configuration`)
+   — take the value after `--server` in `args`.
 2. Else `JFROG_URL` env var set (with `JFROG_ACCESS_TOKEN`) — the
    agent guard can resolve credentials from these directly;
    DO NOT pass `--server` as that would make the agent guard try to
@@ -115,10 +116,22 @@ do NOT pass `--server <ID>`.
 
 **Target config file**
 
-- **Always use `~/.vscode/mcp.json`**
-  (`%USERPROFILE%\.vscode\mcp.json` on Windows). Create it if missing
+VS Code reads MCP config from exactly two places. NEVER use
+`~/.vscode/mcp.json` — that folder holds extensions and `argv.json`, not
+`mcp.json`, and VS Code ignores any `mcp.json` placed there.
+
+- **Default: the user-profile `mcp.json`.** Open it with the
+  `MCP: Open User Configuration` command; on disk it lives at
+  `~/Library/Application Support/Code/User/mcp.json` (macOS),
+  `~/.config/Code/User/mcp.json` (Linux), or
+  `%APPDATA%\Code\User\mcp.json` (Windows). Create it if missing
   (`{ "servers": {}, "inputs": [] }`). Servers here are available across
   all workspaces.
+- Use the workspace **`.vscode/mcp.json`** ONLY if the user says "for
+  this project" / "commit" / "share with the team" (shareable via git).
+  When installing there, write exclusively to the workspace file — do
+  NOT touch the user-profile config.
+- Do not ask which scope unless the user brings it up.
 
 ### Step 2: Inspect the MCP in the catalog
 
@@ -184,8 +197,8 @@ Split Step 2 inputs by `isRequired`:
 
 ### Step 4: Write the config entry
 
-Add the entry under `servers` in `~/.vscode/mcp.json` (see Step 1),
-and declare every input you are
+Add the entry under `servers` in the target config (default the
+user-profile `mcp.json` — see Step 1), and declare every input you are
 configuring under the top-level `inputs` array. **Secrets MUST use
 `${input:...}` substitution — never write a raw secret value into the
 JSON file.**
@@ -235,7 +248,8 @@ registry (404) and may block on a no-TTY prompt. Use
 Rules for the `inputs` block:
 
 - One entry per env var / header you are configuring from Step 3.
-- `id` is an identifier unique within `~/.vscode/mcp.json`, in the form
+- `id` is an identifier unique within the config file it lives in
+  (user-profile `mcp.json` or workspace `.vscode/mcp.json`), in the form
   `<mcp-slug>-<input-name>`, all lowercase, words separated by
   hyphens. Re-use the same `id` across servers only when the value
   truly is shared.
@@ -259,7 +273,7 @@ value, while the file on disk shows only the placeholder.
 
 ### 4a: Start and verify the entry (mandatory)
 
-Writing the entry to `~/.vscode/mcp.json` is not enough — the server has
+Writing the entry to `mcp.json` is not enough — the server has
 to start and actually expose tools.
 
 1. VS Code detects the edited `mcp.json` and offers a **Start** action
@@ -310,7 +324,8 @@ Outcomes:
 
 ## Removing an MCP
 
-1. Delete the entry from `servers` in `~/.vscode/mcp.json`.
+1. Delete the entry from `servers` in the file it was installed in
+   (user-profile `mcp.json` or workspace `.vscode/mcp.json`).
 2. Delete any now-unused entries from the top-level `inputs` array —
    leave NO orphaned input entries for the removed server. For remote
    MCPs, also remove any HTTP header entries that were configured for
@@ -343,12 +358,16 @@ and name the project.
 
 1. Open `MCP: List Servers` for connection status (one row per
    server: Running / Stopped / Failed).
-2. For JFrog metadata, read `servers` directly from `~/.vscode/mcp.json`
-   — use the file-read tool or a single `jq` invocation, NOT chained
-   `python3 -c "..."` pipes. For each entry whose `command` is `npx`
-   and whose `args` include `@jfrog/agent-guard`, show: display name
-   (the JSON key), package (`mcp=` in `_JF_ARGS`), server ID (value
-   after `--server`), and its installed status. Your output should
+2. For JFrog metadata, read `servers` directly from BOTH the workspace
+   `.vscode/mcp.json` and the user-profile `mcp.json`
+   (`~/Library/Application Support/Code/User/mcp.json` on macOS,
+   `~/.config/Code/User/mcp.json` on Linux,
+   `%APPDATA%\Code\User\mcp.json` on Windows) — use the file-read tool
+   or a single `jq` invocation, NOT chained `python3 -c "..."` pipes.
+   For each entry whose `command` is `npx` and whose `args` include
+   `@jfrog/agent-guard`, show: display name (the JSON key), package
+   (`mcp=` in `_JF_ARGS`), server ID (value after `--server`), scope
+   (workspace / user), and its installed status. Your output should
    structurally mirror the config.
 3. If a configured entry does not appear in `MCP: List Servers`, it
    was never started — re-run Step 4a.
@@ -422,7 +441,7 @@ the display name.
   the output stream. For `--list-available` present the compact TSV it
   prints; for `--inspect` read the JSON it prints on stdout
   directly (or with a single `jq` filter), never via `python3`.
-- NEVER write a raw secret into `~/.vscode/mcp.json` — always use an
+- NEVER write a raw secret into `mcp.json` — always use an
   `${input:<id>}` reference. NEVER show tokens / API keys.
 - NEVER try multiple servers — ask the user to pick one.
 
@@ -444,12 +463,12 @@ the display name.
        launched (agent guard stderr will show the spawn error).
   2. Verify that the mcp server is still allowed.
      See "Listing MCPs > Available to install".
-- **`~/.vscode/mcp.json` server missing from `MCP: List Servers`** —
+- **`mcp.json` server missing from `MCP: List Servers`** —
   never started, or a JSON parse failure (often an undefined
   `${input:...}` id). Fix the config and re-run Step 4a.
 - **HTTP 401 / 403 on a server with `${input:...}`** — the stored
   secret is wrong. Tell the user to click the **Clear** CodeLens above
-  the matching `inputs` entry in `~/.vscode/mcp.json`, then restart the
+  the matching `inputs` entry in `mcp.json`, then restart the
   server; VS Code re-prompts for the secret.
 - **Agent Guard: `multiple/no JFrog server configured`** (the agent guard
   cannot pick a JFrog server) — pass `--server <ID>` (after
