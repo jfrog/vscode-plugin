@@ -84,7 +84,7 @@ unless absolutely necessary:
 **Server ID**
 
 1. Any existing `servers` entry in the workspace `.vscode/mcp.json` or
-   the user-profile `mcp.json` (open via `MCP: Open User Configuration`)
+   the user-level `~/.vscode/mcp.json` (open via `MCP: Open User Configuration`)
    — take the value after `--server` in `args`.
 2. Else `JFROG_URL` env var set (with `JFROG_ACCESS_TOKEN`) — the
    agent guard can resolve credentials from these directly;
@@ -116,21 +116,17 @@ do NOT pass `--server <ID>`.
 
 **Target config file**
 
-VS Code reads MCP config from exactly two places. NEVER use
-`~/.vscode/mcp.json` — that folder holds extensions and `argv.json`, not
-`mcp.json`, and VS Code ignores any `mcp.json` placed there.
+VS Code reads MCP config from exactly two places.
 
-- **Default: the user-profile `mcp.json`.** Open it with the
-  `MCP: Open User Configuration` command; on disk it lives at
-  `~/Library/Application Support/Code/User/mcp.json` (macOS),
-  `~/.config/Code/User/mcp.json` (Linux), or
-  `%APPDATA%\Code\User\mcp.json` (Windows). Create it if missing
+- **Default: the user-level `~/.vscode/mcp.json`** (`%USERPROFILE%\.vscode\mcp.json`
+  on Windows). Open it with the `MCP: Open User Configuration` command; on disk
+  it lives at `~/.vscode/mcp.json`. Create it if missing
   (`{ "servers": {}, "inputs": [] }`). Servers here are available across
   all workspaces.
 - Use the workspace **`.vscode/mcp.json`** ONLY if the user says "for
   this project" / "commit" / "share with the team" (shareable via git).
   When installing there, write exclusively to the workspace file — do
-  NOT touch the user-profile config.
+  NOT touch the user-level config.
 - Do not ask which scope unless the user brings it up.
 
 ### Step 2: Inspect the MCP in the catalog
@@ -198,7 +194,7 @@ Split Step 2 inputs by `isRequired`:
 ### Step 4: Write the config entry
 
 Add the entry under `servers` in the target config (default the
-user-profile `mcp.json` — see Step 1), and declare every input you are
+user-level `~/.vscode/mcp.json` — see Step 1), and declare every input you are
 configuring under the top-level `inputs` array. **Secrets MUST use
 `${input:...}` substitution — never write a raw secret value into the
 JSON file.**
@@ -249,7 +245,7 @@ Rules for the `inputs` block:
 
 - One entry per env var / header you are configuring from Step 3.
 - `id` is an identifier unique within the config file it lives in
-  (user-profile `mcp.json` or workspace `.vscode/mcp.json`), in the form
+  (user-level `~/.vscode/mcp.json` or workspace `.vscode/mcp.json`), in the form
   `<mcp-slug>-<input-name>`, all lowercase, words separated by
   hyphens. Re-use the same `id` across servers only when the value
   truly is shared.
@@ -325,7 +321,7 @@ Outcomes:
 ## Removing an MCP
 
 1. Delete the entry from `servers` in the file it was installed in
-   (user-profile `mcp.json` or workspace `.vscode/mcp.json`).
+   (user-level `~/.vscode/mcp.json` or workspace `.vscode/mcp.json`).
 2. Delete any now-unused entries from the top-level `inputs` array —
    leave NO orphaned input entries for the removed server. For remote
    MCPs, also remove any HTTP header entries that were configured for
@@ -359,10 +355,8 @@ and name the project.
 1. Open `MCP: List Servers` for connection status (one row per
    server: Running / Stopped / Failed).
 2. For JFrog metadata, read `servers` directly from BOTH the workspace
-   `.vscode/mcp.json` and the user-profile `mcp.json`
-   (`~/Library/Application Support/Code/User/mcp.json` on macOS,
-   `~/.config/Code/User/mcp.json` on Linux,
-   `%APPDATA%\Code\User\mcp.json` on Windows) — use the file-read tool
+   `.vscode/mcp.json` and the user-level `~/.vscode/mcp.json`
+   (`%USERPROFILE%\.vscode\mcp.json` on Windows) — use the file-read tool
    or a single `jq` invocation, NOT chained `python3 -c "..."` pipes.
    For each entry whose `command` is `npx` and whose `args` include
    `@jfrog/agent-guard`, show: display name (the JSON key), package
