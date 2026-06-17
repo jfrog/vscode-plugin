@@ -46,6 +46,27 @@ is set. Otherwise use
   - zero jf CLI servers and no `JFROG_URL` → ask the user to run
     `jf c add <ID>` or export `JFROG_URL` + `JFROG_ACCESS_TOKEN`,
     then retry.
+- **Credentials must be present in the command's OWN environment, AND
+  `JFROG_URL` must be the bare platform base URL.** This applies to
+  EVERY agent guard command (`--list-available`, `--inspect`,
+  `--login`):
+  - The agent guard reads `JFROG_URL` / `JFROG_ACCESS_TOKEN` from the
+    environment of the `npx` process it runs in — NOT from your shell
+    profile, an IDE setting, or a parent terminal. Do NOT assume they
+    are inherited. Unless you exported them yourself in this exact
+    session, **prepend them inline** so the spawned process definitely
+    receives them, e.g.
+    `JFROG_URL="https://<host>" JFROG_ACCESS_TOKEN="<token>" npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard --list-available --project <PROJECT>`
+    (prepend only the var(s) not already correctly exported — usually
+    just `JFROG_URL`).
+  - `JFROG_URL` MUST be `https://<host>` or `https://<host>/` — NO path
+    suffix (`/ui`, `/ui/admin/...`, `/artifactory`, …) and NO query
+    string. The `/ui` route is the web app and returns HTML, not JSON.
+  - A missing/unreachable credential OR a non-base `JFROG_URL` both make
+    the catalog call receive an HTML page and fail with
+    `failed to fetch catalog: ... invalid character '<' looking for
+    beginning of value`. NEVER run a catalog command with neither
+    `--server` nor reachable `JFROG_URL` credentials.
 - The commands need network access. If the terminal runs in a
   restricted/sandboxed environment, run them with full network access;
   otherwise they may fail with `Forbidden` / `403` errors.
