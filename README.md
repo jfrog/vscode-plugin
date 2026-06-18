@@ -15,7 +15,6 @@ The JFrog plugin provides the following capabilities, grouped by component:
 
 | Component | Feature | Description |
 | --- | --- | --- |
-| **MCP** | JFrog MCP (always-on) | Built-in JFrog MCP routed through `@jfrog/agent-guard` to `${JFROG_URL}/mcp`. Always available, not subject to AI Catalog policy — see [JFrog MCP](#jfrog-mcp). |
 | **Hook** | Agent Guard | Copilot manage MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 
 ---
@@ -115,15 +114,6 @@ After authentication, open a workspace in VS Code. The session-start hook instal
 | "Remove the Slack MCP server." | Removes the server and its stored credentials from your local setup. Changes apply immediately. |
 | "Log in to the remote Jira MCP server using OAuth." | Authenticates with a remote HTTP-based MCP server (OAuth, API key, or bearer token). |
 | "Log out of the Jira MCP server." | Removes stored authentication credentials for a server. |
-
-### JFrog MCP
-
-The plugin ships a built-in `jfrog` MCP registered in `.mcp.json`. VS Code
-launches it automatically as `npx @jfrog/agent-guard` with
-`_JF_ARGS=mcp=jfrog-mcp`. agent-guard recognizes that shape, skips the AI
-Catalog, and connects directly to `${JFROG_URL}/mcp` with
-`Authorization: Bearer ${JFROG_ACCESS_TOKEN}` (both env vars are listed
-under [Authentication](#authentication)).
 
 ### How secrets are handled
 
