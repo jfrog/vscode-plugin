@@ -143,6 +143,8 @@ try {
 // legacy ensure-instructions scripts and is the primary delivery path for
 // Copilot; the additionalContext payload below additionally covers Claude Code
 // sessions. Only write when absent so we never clobber a user-edited file.
+// To force a refresh after a plugin update, delete the file — it will be
+// rewritten on the next session start.
 try {
   const targetDir = path.join(process.cwd(), ".github");
   const targetFile = path.join(targetDir, "copilot-instructions.md");

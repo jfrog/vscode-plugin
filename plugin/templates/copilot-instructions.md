@@ -105,8 +105,9 @@ unless absolutely necessary:
 **Server ID**
 
 1. Any existing `servers` entry in the workspace `.vscode/mcp.json` or
-   the user-level `~/.vscode/mcp.json` (open via `MCP: Open User Configuration`)
-   — take the value after `--server` in `args`.
+   the user-level MCP config (open via `MCP: Open User Configuration`; see
+   "Target config file" below for disk paths) — take the value after
+   `--server` in `args`.
 2. Else `JFROG_URL` env var set (with `JFROG_ACCESS_TOKEN`) — the
    agent guard can resolve credentials from these directly;
    DO NOT pass `--server` as that would make the agent guard try to
@@ -139,11 +140,15 @@ do NOT pass `--server <ID>`.
 
 VS Code reads MCP config from exactly two places.
 
-- **Default: the user-level `~/.vscode/mcp.json`** (`%USERPROFILE%\.vscode\mcp.json`
-  on Windows). Open it with the `MCP: Open User Configuration` command; on disk
-  it lives at `~/.vscode/mcp.json`. Create it if missing
-  (`{ "servers": {}, "inputs": [] }`). Servers here are available across
-  all workspaces.
+- **Default: the user-level MCP config.** Open it with the
+  `MCP: Open User Configuration` command. On disk it lives in the VS Code
+  user-profile folder:
+  - macOS: `~/Library/Application Support/Code/User/mcp.json`
+  - Linux: `~/.config/Code/User/mcp.json`
+  - Windows: `%APPDATA%\Code\User\mcp.json`
+
+  Create it if missing (`{ "servers": {}, "inputs": [] }`). Servers here
+  are available across all workspaces.
 - Use the workspace **`.vscode/mcp.json`** ONLY if the user says "for
   this project" / "commit" / "share with the team" (shareable via git).
   When installing there, write exclusively to the workspace file — do
@@ -215,7 +220,7 @@ Split Step 2 inputs by `isRequired`:
 ### Step 4: Write the config entry
 
 Add the entry under `servers` in the target config (default the
-user-level `~/.vscode/mcp.json` — see Step 1), and declare every input you are
+user-level MCP config — see Step 1), and declare every input you are
 configuring under the top-level `inputs` array. **Secrets MUST use
 `${input:...}` substitution — never write a raw secret value into the
 JSON file.**
@@ -266,7 +271,7 @@ Rules for the `inputs` block:
 
 - One entry per env var / header you are configuring from Step 3.
 - `id` is an identifier unique within the config file it lives in
-  (user-level `~/.vscode/mcp.json` or workspace `.vscode/mcp.json`), in the form
+  (user-level MCP config or workspace `.vscode/mcp.json`), in the form
   `<mcp-slug>-<input-name>`, all lowercase, words separated by
   hyphens. Re-use the same `id` across servers only when the value
   truly is shared.
@@ -342,7 +347,7 @@ Outcomes:
 ## Removing an MCP
 
 1. Delete the entry from `servers` in the file it was installed in
-   (user-level `~/.vscode/mcp.json` or workspace `.vscode/mcp.json`).
+   (user-level MCP config or workspace `.vscode/mcp.json`).
 2. Delete any now-unused entries from the top-level `inputs` array —
    leave NO orphaned input entries for the removed server. For remote
    MCPs, also remove any HTTP header entries that were configured for
@@ -376,8 +381,8 @@ and name the project.
 1. Open `MCP: List Servers` for connection status (one row per
    server: Running / Stopped / Failed).
 2. For JFrog metadata, read `servers` directly from BOTH the workspace
-   `.vscode/mcp.json` and the user-level `~/.vscode/mcp.json`
-   (`%USERPROFILE%\.vscode\mcp.json` on Windows) — use the file-read tool
+   `.vscode/mcp.json` and the user-level MCP config (see "Target config
+   file" in Step 1 for OS-specific paths) — use the file-read tool
    or a single `jq` invocation, NOT chained `python3 -c "..."` pipes.
    For each entry whose `command` is `npx` and whose `args` include
    `@jfrog/agent-guard`, show: display name (the JSON key), package
@@ -481,6 +486,16 @@ the display name.
 - **`mcp.json` server missing from `MCP: List Servers`** —
   never started, or a JSON parse failure (often an undefined
   `${input:...}` id). Fix the config and re-run Step 4a.
+- **Copilot instructions look outdated after a plugin update** — the
+  plugin writes `.github/copilot-instructions.md` only on first install
+  (it never overwrites a file that already exists, to protect edits).
+  To pick up the latest instructions: delete
+  `.github/copilot-instructions.md`, then start a new Claude Code
+  session in the workspace (this triggers the hook that rewrites the
+  file). GitHub Copilot will pick up the refreshed file on the next
+  window reload or automatically. Note: Claude Code sessions always
+  receive the up-to-date instructions via `additionalContext`
+  regardless — this step is only needed for GitHub Copilot.
 - **HTTP 401 / 403 on a server with `${input:...}`** — the stored
   secret is wrong. Tell the user to click the **Clear** CodeLens above
   the matching `inputs` entry in `mcp.json`, then restart the
