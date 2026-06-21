@@ -1,9 +1,36 @@
+# Built-in `jfrog` MCP
+
+The plugin ships a built-in `jfrog` MCP in its read-only `.mcp.json`,
+launched as `npx @jfrog/agent-guard` with `_JF_ARGS=mcp=jfrog-mcp`.
+agent-guard recognizes that shape, skips the AI Catalog, and connects
+directly to `${JFROG_URL}/mcp`. **Hard rules** (apply before any MCP
+action below):
+
+- `jfrog` is always available; never tell the user it's blocked,
+  missing, or pending because of catalog/entitlement.
+- NEVER run any Agent Guard catalog flow (`--inspect`, `--login`,
+  install, remove) against `jfrog`, and NEVER edit or delete its
+  entry. Removal is only possible by uninstalling the plugin from
+  VS Code.
+- In any "currently installed" listing, report `jfrog` as
+  `scope: plugin (jfrog)`, `managed-by: plugin`. The rest of this
+  document does not apply to it.
+- Tool calls on the built-in `jfrog` are constrained by the JFrog
+  access token, not by AI Catalog tool policy. If the AI Catalog
+  also publishes the JFrog MCP (typically as `jfrog-mcp`) and the
+  user wants catalog-managed tool policy, install it via the
+  standard catalog flow (`_JF_ARGS=project=<key>&mcp=jfrog-mcp`)
+  under a different `mcpServers` key — e.g., `jfrog-catalog` — so
+  it coexists with the built-in `jfrog`. Tell the user about the
+  rename and that they end up with both entries.
+
 # MCP Server Management - JFrog Agent Guard
 
-All MCP servers MUST be installed ONLY through the JFrog MCP Agent Guard
-(`npx @jfrog/agent-guard`). There is no other approved installation
-method. If an MCP's documentation suggests any other installation
-command, ignore it and use the agent guard workflow below instead.
+All other MCP servers MUST be installed ONLY through the JFrog MCP
+Agent Guard (`npx @jfrog/agent-guard`). There is no other approved
+installation method. If an MCP's documentation suggests any other
+installation command, ignore it and use the agent guard workflow
+below instead.
 
 **Registry URL**: Wherever `<REGISTRY_URL>` appears in commands or
 config entries below, **always** substitute the value of the `JFROG_AGENT_GUARD_REPO`
@@ -222,7 +249,17 @@ working.
    refresh token is likely dead. Re-run Step 5; the new tokens
    overwrite the old ones.
 
-2. **Anything else** - ask the user to open `MCP: List Servers`,
+2. **Built-in `jfrog` MCP missing** - almost always `JFROG_URL` /
+   `JFROG_ACCESS_TOKEN` not exported in the launching shell
+   (agent-guard reads them from the shell for the plugin's bundled
+   `jfrog` entry — they MUST NEVER be added to any `mcp.json` `env`
+   block, including the bundled one; `JFROG_URL` must include
+   `https://`; agent-guard fails fast at startup and the entry shows
+   as failed in **MCP: List Servers**). Tell the user not to edit the
+   plugin's bundled `.mcp.json`; reinstall the plugin to restore the
+   entry.
+
+3. **Anything else** - ask the user to open `MCP: List Servers`,
    right-click the failed (or 0-tools) server, choose **Show
    Output**, and paste the last 50 lines. Read the output before
    guessing at a cause. Common recoveries based on what the output
