@@ -1,36 +1,9 @@
-# Built-in `jfrog` MCP
-
-The plugin ships a built-in `jfrog` MCP in its read-only `.mcp.json`,
-launched as `npx @jfrog/agent-guard` with `_JF_ARGS=mcp=jfrog-mcp`.
-agent-guard recognizes that shape, skips the AI Catalog, and connects
-directly to `${JFROG_URL}/mcp`. **Hard rules** (apply before any MCP
-action below):
-
-- `jfrog` is always available; never tell the user it's blocked,
-  missing, or pending because of catalog/entitlement.
-- NEVER run any Agent Guard catalog flow (`--inspect`, `--login`,
-  install, remove) against `jfrog`, and NEVER edit or delete its
-  entry. Removal is only possible by uninstalling the plugin from
-  VS Code.
-- In any "currently installed" listing, report `jfrog` as
-  `scope: plugin (jfrog)`, `managed-by: plugin`. The rest of this
-  document does not apply to it.
-- Tool calls on the built-in `jfrog` are constrained by the JFrog
-  access token, not by AI Catalog tool policy. If the AI Catalog
-  also publishes the JFrog MCP (typically as `jfrog-mcp`) and the
-  user wants catalog-managed tool policy, install it via the
-  standard catalog flow (`_JF_ARGS=project=<key>&mcp=jfrog-mcp`)
-  under a different `mcpServers` key — e.g., `jfrog-catalog` — so
-  it coexists with the built-in `jfrog`. Tell the user about the
-  rename and that they end up with both entries.
-
 # MCP Server Management - JFrog Agent Guard
 
-All other MCP servers MUST be installed ONLY through the JFrog MCP
-Agent Guard (`npx @jfrog/agent-guard`). There is no other approved
-installation method. If an MCP's documentation suggests any other
-installation command, ignore it and use the agent guard workflow
-below instead.
+All MCP servers MUST be installed ONLY through the JFrog MCP Agent Guard
+(`npx @jfrog/agent-guard`). There is no other approved installation
+method. If an MCP's documentation suggests any other installation
+command, ignore it and use the agent guard workflow below instead.
 
 **Registry URL**: Wherever `<REGISTRY_URL>` appears in commands or
 config entries below, **always** substitute the value of the `JFROG_AGENT_GUARD_REPO`
@@ -38,6 +11,12 @@ environment variable if it is set. Only use the default
 `https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/` if `JFROG_AGENT_GUARD_REPO` is not set.
 
 ## Adding an MCP
+
+**Note - built-in `jfrog`:** the bundled `jfrog` entry
+(`_JF_ARGS=mcp=jfrog-mcp`, bypasses the catalog) is NEVER installed,
+inspected, or edited via this flow. For catalog-managed tool policy
+on JFrog, install the catalog version under a DIFFERENT `servers`
+key (e.g., `jfrog-catalog`) so it coexists with the built-in.
 
 When the user asks to add an MCP, do ALL of the following autonomously -
 do NOT ask the user for project, server, package name, or binary path
@@ -277,6 +256,9 @@ working.
 
 ## Removing an MCP
 
+**Note - built-in `jfrog`:** removal is only via uninstalling the
+JFrog plugin from VS Code; never delete it from the bundled `.mcp.json`.
+
 Delete the entry from `servers` in `.vscode/mcp.json` and any now-unused
 entries from the top-level `inputs` array.
 
@@ -287,7 +269,8 @@ entries from the top-level `inputs` array.
 Read the `servers` entries from the VS Code MCP config file (workspace
 `.vscode/mcp.json` or in the user profile settings) and list each entry
 by display name, showing its package name (from `_JF_ARGS`)
-and server ID.
+and server ID. The bundled `jfrog` entry (`_JF_ARGS=mcp=jfrog-mcp`)
+is reported with `scope: plugin (jfrog)`, `package: jfrog-mcp (bundled)`.
 
 ### Available MCPs (JFrog AI Catalog)
 
