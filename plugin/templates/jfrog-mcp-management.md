@@ -46,9 +46,9 @@ is set. Otherwise use
   - zero jf CLI servers and no `JFROG_URL` → ask the user to run
     `jf c add <ID>` or export `JFROG_URL` + `JFROG_ACCESS_TOKEN`,
     then retry.
-- The commands need network access. If the terminal runs in a
-  restricted/sandboxed environment, run them with full network access;
-  otherwise they may fail with `Forbidden` / `403` errors.
+- The commands need network access to the npm registry and the JFrog
+  platform. A corporate proxy, VPN, or blocked registry can surface as
+  `Forbidden` / `403` errors.
 
 Once both are determined, proceed. If either is still unknown,
 STOP — do NOT run the command with guesses.
@@ -60,11 +60,11 @@ STOP — do NOT run the command with guesses.
 "add an MCP", "what can I install" — your FIRST action is to show
 them the catalog so they can pick:
 
-1. Resolve server (Server ID `<SERVER_ID>` or URL `JFROG_URL`)
+1. Resolve server (Server ID`<SERVER_ID>` or URL `JFROG_URL`)
    and `<PROJECT>` per the Pre-flight rule at the top of this document.
    Server: auto-use the single jf CLI configs serverId as the server ID
    or the `JFROG_URL` env var as the URL if unambiguous; only ask when
-   there are multiple or no jf configs and no env vars.
+   there are multiple or no jf configs and not env vars.
    Project: Ask unless `JF_PROJECT` is set, or it's already in an
    existing `servers` entry.
 2. Run "Listing MCPs > Available to install" with that server +
@@ -125,7 +125,6 @@ VS Code reads MCP config from exactly two places.
   - macOS: `~/Library/Application Support/Code/User/mcp.json`
   - Linux: `~/.config/Code/User/mcp.json`
   - Windows: `%APPDATA%\Code\User\mcp.json`
-
   Create it if missing (`{ "servers": {}, "inputs": [] }`). Servers here
   are available across all workspaces.
 - Use the workspace **`.vscode/mcp.json`** ONLY if the user says "for
@@ -313,8 +312,8 @@ npx --yes \
 ```
 
 Note: `--login` launches the system browser and runs a local OAuth
-callback server, so in a restricted/sandboxed environment it needs full
-(unrestricted) permissions — network access alone is not enough.
+callback server, so the browser must be able to reach the IdP and loop
+back to the local callback.
 
 Outcomes:
 
@@ -446,22 +445,31 @@ the display name.
 
 ## Troubleshooting
 
+**Agent vs user actions:** you cannot operate the VS Code UI. Anything
+that requires clicking, right-clicking, a CodeLens, or running a `MCP:`
+command palette action is a **user** step — ask the user to do it and
+paste back any output. Reading files, running `npx @jfrog/agent-guard`
+commands, and editing `mcp.json` are **your** steps; do those yourself
+and keep the asks to the minimum.
+
 - **Running but 0 tools (`MCP: List Servers` shows the server Running
   but it reports "Discovered 0 tools")** — agent guard proxy started,
   upstream MCP did not. The Running label is misleading here. NEVER
   report success when there are 0 tools.
-  1. In `MCP: List Servers`, right-click the server and choose **Show
-     Output**; read the last ~50 lines of agent guard stderr before
-     guessing, then diagnose by MCP type:
-     - **OAuth (remote)** — re-run Step 5 (`--login`); refresh token
+  1. **Ask the user** (UI-only step) to open `MCP: List Servers`,
+     right-click the server, choose **Show Output**, and paste back the
+     last ~50 lines of agent guard output. Read them before guessing,
+     then diagnose by MCP type:
+     - **OAuth (remote)** — you re-run Step 5 (`--login`); refresh token
        likely expired.
-     - **Static-token (remote)** — confirm the `${input:...}` value is
-       set (re-prompt via the **Clear** CodeLens, then restart) and the
-       token is still valid.
-     - **Local (stdio)** — check that the bundled binary actually
-       launched (agent guard stderr will show the spawn error).
-  2. Verify that the mcp server is still allowed.
-     See "Listing MCPs > Available to install".
+     - **Static-token (remote)** — the stored `${input:...}` value is
+       likely missing or wrong. **Ask the user** to click the **Clear**
+       CodeLens above the matching `inputs` entry and restart the
+       server so VS Code re-prompts for it.
+     - **Local (stdio)** — you read the spawn error from the output the
+       user pasted (the bundled binary failed to launch).
+  2. You verify the MCP server is still allowed —
+     see "Listing MCPs > Available to install".
 - **`mcp.json` server missing from `MCP: List Servers`** —
   never started, or a JSON parse failure (often an undefined
   `${input:...}` id). Fix the config and re-run Step 4a.
@@ -477,6 +485,6 @@ the display name.
   refresh token expired; re-run Step 5.
 - **Network / proxy / DNS error** — outside the agent guard's scope;
   tell the user and stop.
-- **npx package fetch returns 403 in-agent** — often a network
-  sandbox/egress policy. Run with full network access. If it still
-  fails, troubleshoot registry/auth/package/curation policy as usual.
+- **npx package fetch returns 403** — usually a corporate proxy/VPN, a
+  blocked or wrong registry, or a curation policy. Troubleshoot
+  registry/auth/package/curation policy as usual.
