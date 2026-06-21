@@ -138,11 +138,9 @@ try {
   process.exit(0);
 }
 
-// Inject the instructions solely via the SessionStart hook's
-// additionalContext payload. VS Code / GitHub Copilot consumes
-// hookSpecificOutput.additionalContext directly, so there is no need to
-// materialize a .github/copilot-instructions.md file — doing both would
-// duplicate the instructions Copilot sees.
+// Inject the instructions via the SessionStart hook's additionalContext
+// payload — the IDE consumes hookSpecificOutput.additionalContext directly,
+// so this is the sole delivery mechanism.
 process.stdout.write(
   JSON.stringify({
     hookSpecificOutput: {
