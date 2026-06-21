@@ -52,13 +52,16 @@ is set. Otherwise use
   `--login`):
   - The agent guard reads `JFROG_URL` / `JFROG_ACCESS_TOKEN` from the
     environment of the `npx` process it runs in — NOT from your shell
-    profile, an IDE setting, or a parent terminal. Do NOT assume they
-    are inherited. Unless you exported them yourself in this exact
-    session, **prepend them inline** so the spawned process definitely
-    receives them, e.g.
-    `JFROG_URL="https://<host>" JFROG_ACCESS_TOKEN="<token>" npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard --list-available --project <PROJECT>`
-    (prepend only the var(s) not already correctly exported — usually
-    just `JFROG_URL`).
+    profile, an IDE setting, or a parent terminal. Resolve credentials
+    one of two ways, both of which keep the token OFF the command line:
+    either `JFROG_URL` + `JFROG_ACCESS_TOKEN` are already exported in
+    this session (the agent guard inherits them), or pass **`--server
+    <ID>`** so the agent guard reads the URL and token from
+    `jfrog-cli.conf.v6`. **NEVER write `JFROG_ACCESS_TOKEN` inline on
+    the command line** — it leaks the secret into shell history and
+    process listings. `JFROG_URL` is not secret, so if it isn't already
+    exported you may prepend just it, e.g.
+    `JFROG_URL="https://<host>" npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard --list-available --project <PROJECT>`
   - `JFROG_URL` MUST be `https://<host>` or `https://<host>/` — NO path
     suffix (`/ui`, `/ui/admin/...`, `/artifactory`, …) and NO query
     string. The `/ui` route is the web app and returns HTML, not JSON.
@@ -486,16 +489,6 @@ the display name.
 - **`mcp.json` server missing from `MCP: List Servers`** —
   never started, or a JSON parse failure (often an undefined
   `${input:...}` id). Fix the config and re-run Step 4a.
-- **Copilot instructions look outdated after a plugin update** — the
-  plugin writes `.github/copilot-instructions.md` only on first install
-  (it never overwrites a file that already exists, to protect edits).
-  To pick up the latest instructions: delete
-  `.github/copilot-instructions.md`, then start a new Claude Code
-  session in the workspace (this triggers the hook that rewrites the
-  file). GitHub Copilot will pick up the refreshed file on the next
-  window reload or automatically. Note: Claude Code sessions always
-  receive the up-to-date instructions via `additionalContext`
-  regardless — this step is only needed for GitHub Copilot.
 - **HTTP 401 / 403 on a server with `${input:...}`** — the stored
   secret is wrong. Tell the user to click the **Clear** CodeLens above
   the matching `inputs` entry in `mcp.json`, then restart the
