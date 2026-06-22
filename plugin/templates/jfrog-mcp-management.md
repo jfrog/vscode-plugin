@@ -18,12 +18,11 @@ is set. Otherwise use
   time the user asks to list / show / inspect / check the catalog or a
   specific MCP — including a repeated question already answered earlier
   in the chat — you **MUST** physically RE-RUN the command. NEVER reuse,
-  copy, or re-display output from previous turns or context history, and
-  NEVER resolve the catalog locally; the catalog, headers, and required
-  inputs change between prompts. (Applies to these catalog/registry
-  fetches only — `--list-available` and `--inspect`; NOT `--login`,
-  which would re-open the OAuth browser, and NOT reading local config
-  files for *installed* state.)
+  copy, or re-display output from previous turns or context history; the
+  catalog, headers, and required inputs change between prompts. (Applies
+  to these catalog/registry fetches only — `--list-available` and
+  `--inspect`; NOT `--login`, which would re-open the OAuth browser, and
+  NOT reading local config for *installed* state.)
 
 - **`<PROJECT>` is always mandatory.** Resolve via Step 1's project
   chain: existing `servers` entries (`_JF_ARGS` → `project=`) →
@@ -102,10 +101,11 @@ unless absolutely necessary:
    ask the user to either run `jf c add <ID>` or export
    `JFROG_URL` + `JFROG_ACCESS_TOKEN`, then retry.
 
-NEVER try multiple servers — pick one. Once chosen: if using a jf CLI
-server, always pass it explicitly as `--server <ID>` in every agent
-guard invocation; if using `JFROG_URL` + `JFROG_ACCESS_TOKEN` instead,
-do NOT pass `--server <ID>`.
+NEVER try multiple servers — pick one. Once chosen, pass it
+If a server from the jf cli configuration is supposed to be used:
+Always explicitly as `--server <ID>` in every agent guard invocation.
+Otherwise, if environment variables for `JFROG_URL` and `JFROG_ACCESS_TOKEN`
+are used: Do NOT pass `--server <ID>`
 
 **Project**
 
@@ -140,8 +140,10 @@ not call `--inspect` — go to "Listing MCPs > Available to install"
 instead, show the catalog, have them pick, then come back to Step 2
 with the chosen name.
 
-Once you have a name, run a SINGLE command — no Fetch/WebFetch, no
-custom curl/Python, no direct JFrog API calls:
+Once you have a name, you must fetch its live details.
+
+Run EXACTLY this command — no Fetch/WebFetch, no custom curl/Python,
+no direct JFrog API calls:
 
 ```
 npx --yes \
@@ -164,15 +166,7 @@ From the output JSON, extract (keep BOTH required AND optional):
 
 On non-zero exit (typo, MCP not in catalog, network error, etc.),
 show the error verbatim, then run `--list-available` (see "Listing
-MCPs") so the user can pick a valid name and retry. If the failure is
-because the MCP is **not allowed in the current project**, say so
-conversationally and name the project — do NOT retry against a
-different project.
-
-If the user gave a name that is NOT in the catalog (typo, near-miss),
-do NOT auto-install or guess. Run `--list-available`, present the
-nearest matching names, and ask the user to confirm which one they
-meant before proceeding.
+MCPs") so the user can pick a valid name and retry.
 
 ### Step 3: Plan inputs
 
@@ -203,11 +197,6 @@ configuring under the top-level `inputs` array. **Secrets MUST use
 `${input:...}` substitution — never write a raw secret value into the
 JSON file.**
 
-**Identifier (`<PACKAGE_ID>` below):** for **local** MCPs use
-`spec.packageName`. For **remote** MCPs there is NO `spec.packageName` —
-use the catalog `name` (the install identifier from Step 2 /
-`--list-available`, e.g. `com.notion/mcp`, `coralogixDemo`) for BOTH the
-server key and the `mcp=` value in `_JF_ARGS`.
 **Both `--yes` and `--registry <URL>` MUST come BEFORE
 `@jfrog/agent-guard`** or `npx` falls back to the default
 registry (404) and may block on a no-TTY prompt. Use
@@ -219,13 +208,18 @@ registry (404) and may block on a no-TTY prompt. Use
   "inputs": [
     {
       "type": "promptString",
-      "id": "<mcp-slug>-<input-name-lowercased>",
+      "id": "<mcp-slug>-<secret-input-name-lowercased>",
       "description": "<description from the catalog>",
       "password": true
+    },
+    {
+      "type": "promptString",
+      "id": "<mcp-slug>-<plain-input-name-lowercased>",
+      "description": "<description from the catalog>"
     }
   ],
   "servers": {
-    "<PACKAGE_ID>": {
+    "<spec.packageName>": {
       "type": "stdio",
       "command": "npx",
       "args": [
@@ -237,8 +231,9 @@ registry (404) and may block on a no-TTY prompt. Use
         "<SERVER_ID>"
       ],
       "env": {
-        "_JF_ARGS": "project=<PROJECT>&mcp=<PACKAGE_ID>",
-        "<ENV_VAR_OR_HEADER_NAME>": "${input:<mcp-slug>-<input-name-lowercased>}"
+        "_JF_ARGS": "project=<PROJECT>&mcp=<spec.packageName>",
+        "<SECRET_ENV_VAR_OR_HEADER_NAME>": "${input:<mcp-slug>-<secret-input-name-lowercased>}",
+        "<PLAIN_ENV_VAR_OR_HEADER_NAME>": "${input:<mcp-slug>-<plain-input-name-lowercased>}"
       }
     }
   }
@@ -273,21 +268,28 @@ value, while the file on disk shows only the placeholder.
 
 ### 4a: Start and verify the entry (mandatory)
 
-Writing the entry to `mcp.json` is not enough — the server has
-to start and actually expose tools.
+Writing the entry to `mcp.json` is not enough — the server still has to
+be started and must actually expose tools. Starting the server, entering
+inputs, and reading server status are all VS Code UI actions the agent
+**cannot** perform — so the agent must ask the user to do each step and
+report back, then act on what they report.
 
-1. VS Code detects the edited `mcp.json` and offers a **Start** action
-   (CodeLens above the server entry, or via `MCP: List Servers` →
-   select the server → **Start Server**). Start it.
-2. On first start, VS Code prompts for any `${input:...}` values
-   (Step 3) using its native secure input and stores them in the OS
-   keychain. Required values must be supplied or the server fails.
-3. **Verify (mandatory):** open `MCP: List Servers` and confirm the
-   server is **Running** AND exposes **at least one tool**. A server
-   shown as Running but reporting **0 tools** ("Discovered 0 tools") is
-   NOT healthy — the agent guard connected but the upstream MCP did
-   not come up, so no tools were exposed. NEVER report success when
-   there are 0 tools; treat 0 tools as Failed and follow Troubleshooting
+1. **Ask the user to start the server.** VS Code detects the edited
+   `mcp.json` and shows a **Start** action — tell the user to click the
+   **Start** CodeLens above the server entry, or run `MCP: List Servers`
+   → select the server → **Start Server**.
+2. **Tell the user they will be prompted for inputs.** On first start,
+   VS Code prompts for each `${input:...}` value (Step 3) using its
+   native secure input and stores it in the OS keychain. Tell the user
+   which values to enter; required values must be supplied or the server
+   fails to start.
+3. **Ask the user to verify (mandatory).** Ask the user to open
+   `MCP: List Servers` and tell you whether the server is **Running**
+   AND exposes **at least one tool**. A server shown as Running but
+   reporting **0 tools** ("Discovered 0 tools") is NOT healthy — the
+   agent guard connected but the upstream MCP did not come up, so no
+   tools were exposed. NEVER report success when the user reports 0
+   tools; treat 0 tools as Failed and follow Troubleshooting
    "Running but 0 tools".
 
 ### Step 5: Authenticate OAuth MCPs (auto, after Step 4)
@@ -351,23 +353,25 @@ NEVER invent MCP integrations from outside the catalog. The only
 authoritative source for what's available is `--list-available`
 against the configured server + project. If that command returns
 nothing or errors, say so — do not pad the answer with names from
-elsewhere. If the project has zero allowed MCPs, say so conversationally
-and name the project.
+elsewhere.
 
 ### Currently installed
 
-1. Open `MCP: List Servers` for connection status (one row per
-   server: Running / Stopped / Failed).
-2. For JFrog metadata, read `servers` directly from BOTH the workspace
-   `.vscode/mcp.json` and the user-level MCP config (see "Target config
-   file" in Step 1 for OS-specific paths) — use the file-read tool
-   or a single `jq` invocation, NOT chained `python3 -c "..."` pipes.
-   For each entry whose `command` is `npx` and whose `args` include
-   `@jfrog/agent-guard`, show: display name (the JSON key), package
-   (`mcp=` in `_JF_ARGS`), server ID (value after `--server`), scope
-   (workspace / user), and its installed status. Your output should
-   structurally mirror the config.
-3. If a configured entry does not appear in `MCP: List Servers`, it
+1. Read `servers` directly from BOTH the workspace `.vscode/mcp.json`
+   and the user-level MCP config (see "Target config file" in Step 1 for
+   OS-specific paths) — use the file-read tool or a single `jq`
+   invocation, NOT chained `python3 -c "..."` pipes. For each entry whose
+   `command` is `npx` and whose `args` include `@jfrog/agent-guard`,
+   show: display name (the JSON key), package (`mcp=` in `_JF_ARGS`),
+   server ID (value after `--server`), and scope (workspace / user).
+   Your output should structurally mirror the config. This covers the
+   normal "what MCPs do I have / are configured" case — do this yourself,
+   do not make the user do anything.
+2. Live connection status (Running / Stopped / Failed) lives only in
+   VS Code's UI, which the agent cannot read. ONLY when the user
+   explicitly asks whether a server is running/connected — or while
+   troubleshooting — ask them to open `MCP: List Servers` and report
+   each server's status. If a configured entry does not appear there, it
    was never started — re-run Step 4a.
 
 ### Available to install
@@ -401,9 +405,8 @@ column — for remote/http MCPs there is no package name, so `name` is
 the display name.
 
 3. Filter out any `name` already present in the installed list
-   (compare against `mcp=` in `_JF_ARGS`). Present the available
-   (not-yet-installed) MCPs, and also show which ones are already
-   installed so the user has the full picture.
+   (compare against `mcp=` in `_JF_ARGS`). Mark the rest as
+   available to install.
 
 ## Key Rules
 

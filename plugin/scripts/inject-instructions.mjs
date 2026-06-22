@@ -25,11 +25,8 @@ const forceDisabled =
 const forceEnabled =
     env("JF_AGENT_GUARD_FORCE_ENABLE") === "true";
 
-// Resolve {baseUrl, token}, preferring env vars and falling back to the JF CLI.
-// We do NOT parse ~/.jfrog/jfrog-cli.conf.v6 ourselves — its format varies
-// across CLI versions. Instead we let the CLI emit its default-server config
-// via `jf config export` (an opaque, base64-encoded Config Token) and decode
-// that stable shape. Returns null when nothing resolves.
+// Resolve {baseUrl, token} from env vars, falling back to the JFrog CLI's
+// default server. Returns null when nothing resolves.
 function resolveCredentials() {
   const baseUrl = env("JFROG_URL", "JF_URL");
   const token = env("JFROG_ACCESS_TOKEN", "JF_ACCESS_TOKEN");
@@ -38,8 +35,7 @@ function resolveCredentials() {
     return { baseUrl, token };
   }
 
-  // `jf config export` (no server ID) exports the DEFAULT server as a
-  // base64-encoded JSON Config Token; the CLI owns all config-format parsing.
+  // `jf config export` emits the default server as a base64-encoded JSON token.
   let configToken;
   try {
     configToken = execFileSync("jf", ["config", "export"], {
@@ -137,9 +133,7 @@ try {
   process.exit(0);
 }
 
-// Inject the instructions via the SessionStart hook's additionalContext
-// payload — the IDE consumes hookSpecificOutput.additionalContext directly,
-// so this is the sole delivery mechanism.
+// The IDE consumes hookSpecificOutput.additionalContext from a SessionStart hook.
 process.stdout.write(
   JSON.stringify({
     hookSpecificOutput: {
