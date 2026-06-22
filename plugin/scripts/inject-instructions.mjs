@@ -3,8 +3,8 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -25,9 +25,11 @@ const forceDisabled =
 const forceEnabled =
     env("JF_AGENT_GUARD_FORCE_ENABLE") === "true";
 
-// Resolve {baseUrl, token}, preferring env vars and falling back to the JF CLI
-// config (~/.jfrog/jfrog-cli.conf.v6): the profile marked isDefault, or the
-// only profile when exactly one is defined. Returns null when nothing resolves.
+// Resolve {baseUrl, token}, preferring env vars and falling back to the JF CLI.
+// We do NOT parse ~/.jfrog/jfrog-cli.conf.v6 ourselves — its format varies
+// across CLI versions. Instead we let the CLI emit its default-server config
+// via `jf config export` (an opaque, base64-encoded Config Token) and decode
+// that stable shape. Returns null when nothing resolves.
 function resolveCredentials() {
   const baseUrl = env("JFROG_URL", "JF_URL");
   const token = env("JFROG_ACCESS_TOKEN", "JF_ACCESS_TOKEN");
@@ -36,37 +38,34 @@ function resolveCredentials() {
     return { baseUrl, token };
   }
 
-  const confPath = path.join(os.homedir(), ".jfrog", "jfrog-cli.conf.v6");
-  let conf;
+  // `jf config export` (no server ID) exports the DEFAULT server as a
+  // base64-encoded JSON Config Token; the CLI owns all config-format parsing.
+  let configToken;
   try {
-    conf = JSON.parse(readFileSync(confPath, "utf8"));
+    configToken = execFileSync("jf", ["config", "export"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch (error) {
-    debug(`Could not read or parse JF CLI config at ${confPath}: ${error.message}`);
+    debug(`'jf config export' failed (jf not on PATH or no server configured): ${error.message}`);
     return null;
   }
 
-  // Only profiles that actually carry a URL and access token are usable.
-  const servers = Array.isArray(conf?.servers)
-    ? conf.servers.filter((s) => s.url && s.accessToken)
-    : [];
-  if (servers.length === 0) {
-    debug("No usable server profiles found in JF CLI config");
+  let cfg;
+  try {
+    cfg = JSON.parse(Buffer.from(configToken, "base64").toString("utf8"));
+  } catch (error) {
+    debug(`Could not decode the jf Config Token: ${error.message}`);
     return null;
   }
 
-  const defaultProfile = servers.find((s) => s.isDefault);
-  if (defaultProfile) {
-    debug(`Resolved credentials using default profile: ${defaultProfile.serverId}`);
-    return { baseUrl: defaultProfile.url, token: defaultProfile.accessToken };
+  if (!cfg?.url || !cfg?.accessToken) {
+    debug("jf Config Token did not contain a usable url + accessToken");
+    return null;
   }
 
-  if (servers.length === 1) {
-    debug(`Resolved credentials using the single available profile: ${servers[0].serverId}`);
-    return { baseUrl: servers[0].url, token: servers[0].accessToken };
-  }
-
-  debug("Multiple JF CLI profiles exist but none is marked default; cannot resolve credentials");
-  return null;
+  debug(`Resolved credentials via 'jf config export' (serverId: ${cfg.serverId ?? "<unknown>"})`);
+  return { baseUrl: cfg.url, token: cfg.accessToken };
 }
 
 async function isAgentGuardEnabledViaSettings() {
