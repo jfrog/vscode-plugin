@@ -4,11 +4,10 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
-// Smoke test for the SessionStart injector. Guards the failure mode that
-// recurred during AX-1694: a template-filename / read-path mismatch makes the
-// injector silently emit nothing (it catches the read error and exits 0). This
-// asserts the happy path actually produces non-empty instructions, and that the
-// hook + template wiring is internally consistent.
+// Smoke test for the SessionStart injector. A template-filename / read-path
+// mismatch makes the injector silently emit nothing (it catches the read error
+// and exits 0). This asserts the happy path actually produces non-empty
+// instructions, and that the hook + template wiring is internally consistent.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -54,8 +53,7 @@ check("injector parses (node --check)", () => {
   execFileSync(process.execPath, ["--check", injector], { stdio: "pipe" });
 });
 
-// The filename the injector reads must match a real template file — this is the
-// drift that broke 3× on AX-1694.
+// The filename the injector reads must match a real template file.
 let injectedTemplate;
 check("injector reads an existing template file", () => {
   const src = readFileSync(injector, "utf8");
