@@ -1,0 +1,113 @@
+#!/usr/bin/env node
+
+// Copyright (c) JFrog Ltd. 2026
+// Licensed under the Apache License, Version 2.0
+// https://www.apache.org/licenses/LICENSE-2.0
+
+// Smoke test for the SessionStart injector. Guards the failure mode that
+// recurred during AX-1694: a template-filename / read-path mismatch makes the
+// injector silently emit nothing (it catches the read error and exits 0). This
+// asserts the happy path actually produces non-empty instructions, and that the
+// hook + template wiring is internally consistent.
+
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const injector = path.join(repoRoot, "plugin", "scripts", "inject-instructions.mjs");
+const templatesDir = path.join(repoRoot, "plugin", "templates");
+const hooksFile = path.join(repoRoot, "plugin", "hooks", "hooks.json");
+
+const failures = [];
+const check = (label, fn) => {
+  try {
+    fn();
+    console.log(`  ok   ${label}`);
+  } catch (error) {
+    failures.push(label);
+    console.log(`  FAIL ${label}\n         ${error.message}`);
+  }
+};
+
+// Run the injector with a clean copy of the env plus the given overrides, so an
+// inherited force-flag or real JFrog credentials can't skew the result.
+function runInjector(overrides) {
+  const env = { ...process.env };
+  delete env._JF_AGENT_GUARD_FORCE_DISABLE;
+  delete env.JF_AGENT_GUARD_FORCE_ENABLE;
+  return execFileSync(process.execPath, [injector], {
+    encoding: "utf8",
+    env: { ...env, ...overrides },
+  });
+}
+
+console.log("Validating SessionStart injector…");
+
+check("injector source exists", () => {
+  if (!existsSync(injector)) throw new Error(`missing: ${injector}`);
+});
+
+check("injector parses (node --check)", () => {
+  execFileSync(process.execPath, ["--check", injector], { stdio: "pipe" });
+});
+
+// The filename the injector reads must match a real template file — this is the
+// drift that broke 3× on AX-1694.
+let injectedTemplate;
+check("injector reads an existing template file", () => {
+  const src = readFileSync(injector, "utf8");
+  const match = src.match(/"templates"\s*,\s*"([^"]+)"/);
+  if (!match) throw new Error('could not find the templates/<file> read path in the injector');
+  injectedTemplate = match[1];
+  const templatePath = path.join(templatesDir, injectedTemplate);
+  if (!existsSync(templatePath)) {
+    throw new Error(`injector reads "${injectedTemplate}" but it does not exist in plugin/templates/`);
+  }
+  if (statSync(templatePath).size === 0) {
+    throw new Error(`template "${injectedTemplate}" is empty`);
+  }
+});
+
+check("force-enable emits non-empty additionalContext", () => {
+  const stdout = runInjector({ JF_AGENT_GUARD_FORCE_ENABLE: "true" });
+  if (!stdout.trim()) throw new Error("stdout was empty");
+  let payload;
+  try {
+    payload = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`stdout did not parse as JSON: ${error.message}`);
+  }
+  const hook = payload?.hookSpecificOutput;
+  if (hook?.hookEventName !== "SessionStart") {
+    throw new Error(`expected hookSpecificOutput.hookEventName === "SessionStart", got ${JSON.stringify(hook?.hookEventName)}`);
+  }
+  if (typeof hook.additionalContext !== "string" || hook.additionalContext.trim().length === 0) {
+    throw new Error("hookSpecificOutput.additionalContext is missing or empty");
+  }
+});
+
+check("force-disable emits {}", () => {
+  const stdout = runInjector({ _JF_AGENT_GUARD_FORCE_DISABLE: "true" }).trim();
+  if (stdout !== "{}") throw new Error(`expected "{}", got ${JSON.stringify(stdout)}`);
+});
+
+check("hooks.json wires SessionStart to the injector", () => {
+  const hooks = JSON.parse(readFileSync(hooksFile, "utf8"));
+  const entries = hooks?.hooks?.SessionStart;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error("hooks.json has no SessionStart hooks");
+  }
+  const commands = entries.flatMap((e) => (e.hooks ?? []).map((h) => h.command ?? ""));
+  if (!commands.some((c) => c.includes("inject-instructions.mjs"))) {
+    throw new Error("no SessionStart command references inject-instructions.mjs");
+  }
+});
+
+if (failures.length > 0) {
+  console.error(`\n${failures.length} check(s) failed.`);
+  process.exit(1);
+}
+console.log("\nAll checks passed.");
