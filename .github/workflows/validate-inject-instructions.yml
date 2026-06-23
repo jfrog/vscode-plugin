@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0
 # https://www.apache.org/licenses/LICENSE-2.0
 
-name: Validate Template
+name: Validate hook injection
 
 on:
   pull_request:
@@ -14,7 +14,6 @@ on:
       - "plugin/.claude-plugin/plugin.json"
       - "marketplace.json"
       - "scripts/validate-hook-injector.mjs"
-      - ".github/workflows/validate-inject-instructions.yml"
 
 jobs:
   validate:
