@@ -11,6 +11,8 @@ on:
       - "plugin/scripts/inject-instructions.mjs"
       - "plugin/templates/jfrog-mcp-management.md"
       - "plugin/hooks/hooks.json"
+      - "plugin/.claude-plugin/plugin.json"
+      - "marketplace.json"
       - "scripts/validate-hook-injector.mjs"
       - ".github/workflows/validate-inject-instructions.yml"
 

@@ -4,10 +4,12 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
-// Smoke test for the SessionStart injector. A template-filename / read-path
-// mismatch makes the injector silently emit nothing (it catches the read error
-// and exits 0). This asserts the happy path actually produces non-empty
-// instructions, and that the hook + template wiring is internally consistent.
+// Smoke test for the SessionStart injector + plugin packaging. A
+// template-filename / read-path mismatch makes the injector silently emit
+// nothing (it catches the read error and exits 0). This asserts the happy path
+// actually produces non-empty instructions, that the hook + template wiring is
+// internally consistent, and that marketplace.json / plugin.json agree on name
+// and version and reference only paths that exist.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -43,7 +45,7 @@ function runInjector(overrides) {
   });
 }
 
-console.log("Validating SessionStart injector…");
+console.log("Validating SessionStart injector + plugin packaging…");
 
 check("injector source exists", () => {
   if (!existsSync(injector)) throw new Error(`missing: ${injector}`);
@@ -110,6 +112,48 @@ check("hooks.json wires SessionStart to the injector", () => {
   const commands = entries.flatMap((e) => (e.hooks ?? []).map((h) => h.command ?? ""));
   if (!commands.some((c) => c.includes("inject-instructions.mjs"))) {
     throw new Error("no SessionStart command references inject-instructions.mjs");
+  }
+});
+
+// ---- Manifest / packaging checks ----
+// marketplace.json and plugin.json must be valid, agree on name + version,
+// and point only at paths that exist.
+const marketplaceFile = path.join(repoRoot, "marketplace.json");
+const pluginManifestFile = path.join(repoRoot, "plugin", ".claude-plugin", "plugin.json");
+
+let marketplacePlugin;
+check("marketplace.json lists the jfrog plugin with a valid version and source", () => {
+  const mp = JSON.parse(readFileSync(marketplaceFile, "utf8"));
+  if (!Array.isArray(mp.plugins) || mp.plugins.length === 0) {
+    throw new Error('"plugins" must be a non-empty array');
+  }
+  marketplacePlugin = mp.plugins.find((p) => p && p.name === "jfrog");
+  if (!marketplacePlugin) throw new Error('no plugin named "jfrog" in marketplace.json');
+  if (!/^\d+\.\d+\.\d+$/.test(marketplacePlugin.version ?? "")) {
+    throw new Error(`plugin version is missing or not semver: ${JSON.stringify(marketplacePlugin.version)}`);
+  }
+  const src = marketplacePlugin.source;
+  if (typeof src !== "string" || !src) throw new Error('plugin "source" must be a non-empty string');
+  if (!existsSync(path.join(repoRoot, src))) throw new Error(`source dir "${src}" does not exist`);
+});
+
+let pluginManifest;
+check("plugin.json matches the marketplace entry (name + version)", () => {
+  pluginManifest = JSON.parse(readFileSync(pluginManifestFile, "utf8"));
+  if (pluginManifest.name !== "jfrog") {
+    throw new Error(`plugin.json name "${pluginManifest.name}" does not match marketplace name "jfrog"`);
+  }
+  if (marketplacePlugin && pluginManifest.version !== marketplacePlugin.version) {
+    throw new Error(`plugin.json version "${pluginManifest.version}" does not match marketplace version "${marketplacePlugin.version}"`);
+  }
+});
+
+check("plugin.json hooks path exists", () => {
+  if (!pluginManifest) throw new Error("plugin.json was not parsed (see earlier check)");
+  const hooksRel = pluginManifest.hooks;
+  if (typeof hooksRel !== "string" || !hooksRel) throw new Error('plugin.json "hooks" must be a non-empty string');
+  if (!existsSync(path.join(repoRoot, "plugin", hooksRel))) {
+    throw new Error(`plugin.json "hooks" references missing path "${hooksRel}"`);
   }
 });
 
