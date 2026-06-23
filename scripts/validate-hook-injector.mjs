@@ -54,22 +54,22 @@ check("injector parses (node --check)", () => {
 });
 
 // The filename the injector reads must match a real template file.
-let injectedTemplate;
+let templateName;
 check("injector reads an existing template file", () => {
   const src = readFileSync(injector, "utf8");
   const match = src.match(/"templates"\s*,\s*"([^"]+)"/);
   if (!match) throw new Error('could not find the templates/<file> read path in the injector');
-  injectedTemplate = match[1];
-  const templatePath = path.join(templatesDir, injectedTemplate);
+  templateName = match[1];
+  const templatePath = path.join(templatesDir, templateName);
   if (!existsSync(templatePath)) {
-    throw new Error(`injector reads "${injectedTemplate}" but it does not exist in plugin/templates/`);
+    throw new Error(`injector reads "${templateName}" but it does not exist in plugin/templates/`);
   }
   if (statSync(templatePath).size === 0) {
-    throw new Error(`template "${injectedTemplate}" is empty`);
+    throw new Error(`template "${templateName}" is empty`);
   }
 });
 
-check("force-enable emits non-empty additionalContext", () => {
+check("force-enable injects the actual template as additionalContext", () => {
   const stdout = runInjector({ JF_AGENT_GUARD_FORCE_ENABLE: "true" });
   if (!stdout.trim()) throw new Error("stdout was empty");
   let payload;
@@ -84,6 +84,15 @@ check("force-enable emits non-empty additionalContext", () => {
   }
   if (typeof hook.additionalContext !== "string" || hook.additionalContext.trim().length === 0) {
     throw new Error("hookSpecificOutput.additionalContext is missing or empty");
+  }
+  // Not just non-empty — the injected payload must be the real template,
+  // byte-for-byte. Proves the injector actually delivers the instructions.
+  if (!templateName) {
+    throw new Error("template filename was not resolved (see earlier check)");
+  }
+  const expected = readFileSync(path.join(templatesDir, templateName), "utf8");
+  if (hook.additionalContext !== expected) {
+    throw new Error("injected additionalContext does not match the template file content");
   }
 });
 

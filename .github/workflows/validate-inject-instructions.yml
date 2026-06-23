@@ -7,14 +7,16 @@ name: Validate Template
 on:
   pull_request:
     branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: read
+    paths:
+      - "plugin/scripts/inject-instructions.mjs"
+      - "plugin/templates/jfrog-mcp-management.md"
+      - "plugin/hooks/hooks.json"
+      - "scripts/validate-hook-injector.mjs"
+      - ".github/workflows/validate-inject-instructions.yml"
 
 jobs:
   validate:
-    name: Validate SessionStart injector
+    name: Validate hook injection
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,4 +28,4 @@ jobs:
           node-version: "20"
 
       - name: Run injector validation
-        run: node scripts/validate-template.mjs
+        run: node scripts/validate-hook-injector.mjs

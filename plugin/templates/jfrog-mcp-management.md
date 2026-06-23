@@ -8,7 +8,7 @@ below instead.
 
 **Registry URL**: Wherever `<REGISTRY_URL>` appears below, substitute
 the value of the `JFROG_AGENT_GUARD_REPO` environment variable if it
-is set. Otherwise use
+is set. Otherwise, use
 `https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/`.
 
 **Pre-flight (applies to every agent guard command —
@@ -29,22 +29,20 @@ is set. Otherwise use
   `JF_PROJECT` env var → ASK the user. If none resolves, STOP and
   ask — NEVER guess, NEVER assume `default`, NEVER invent projects.
 
-- **`<SERVER_ID>` is auto-resolvable.** Resolve via Step 1's server
-  chain: existing `servers` entries (value after `--server` in
-  `args`) → `~/.jfrog/jfrog-cli.conf.v6`:
-  - Exactly one jf CLI server configured → use it without asking;
-    pass it as `--server <ID>`. The agent guard would auto-resolve to the same
-    value if `--server` were omitted, but we pass it explicitly for
-    clarity and forward-compatibility.
-  - `JFROG_URL` + `JFROG_ACCESS_TOKEN` set → use it without asking;
-    The agent guard will pick them up from the environment variables when called.
-  - Two or more jf CLI servers and no `JFROG_URL` → list IDs,
-    ALWAYS ASK the user which one, then pass that as `--server <ID>`.
-    ALWAYS prefer environment variables when set over asking.
-    NEVER guess one server.
-  - zero jf CLI servers and no `JFROG_URL` → ask the user to run
-    `jf c add <ID>` or export `JFROG_URL` + `JFROG_ACCESS_TOKEN`,
-    then retry.
+- **`<SERVER_ID>` is auto-resolvable.** Resolve in order, stop at the
+  first match:
+  1. An existing `servers` entry's `--server <ID>` (workspace or user
+     config) — reuse it.
+  2. `JFROG_URL` + `JFROG_ACCESS_TOKEN` set in the env — use them and do
+     NOT pass `--server` (the agent guard reads the env directly).
+  3. `~/.jfrog/jfrog-cli.conf.v6`: exactly one server → use it; two or
+     more → use the one with `"isDefault": true`; if none is marked
+     default → ASK the user which one. Then pass `--server <ID>`.
+  4. None of the above → ask the user to run `jf c add <ID>` or export
+     `JFROG_URL` + `JFROG_ACCESS_TOKEN`, then retry.
+
+  When you resolved the ID from a jf CLI config, always pass it as
+  `--server <ID>`; when using env vars, never pass `--server`.
 - The commands need network access to the npm registry and the JFrog
   platform. A corporate proxy, VPN, or blocked registry can surface as
   `Forbidden` / `403` errors.
@@ -96,16 +94,15 @@ unless absolutely necessary:
    NEVER print the full file contents as it can contain secrets.
    Use the serverId subkeys:
    - exactly one server → use it without asking.
-   - two or more → list the `serverId`s and ASK the user which one.
+   - two or more → use the one with `"isDefault": true`; if none is
+     marked default, list the `serverId`s and ASK the user which one.
 4. Else (file missing, empty, or unreadable, and no `JFROG_URL`)
    ask the user to either run `jf c add <ID>` or export
    `JFROG_URL` + `JFROG_ACCESS_TOKEN`, then retry.
 
-NEVER try multiple servers — pick one. Once chosen, pass it
-If a server from the jf cli configuration is supposed to be used:
-Always explicitly as `--server <ID>` in every agent guard invocation.
-Otherwise, if environment variables for `JFROG_URL` and `JFROG_ACCESS_TOKEN`
-are used: Do NOT pass `--server <ID>`
+NEVER try multiple servers — pick one. When you resolved the ID from a
+jf CLI config, always pass it as `--server <ID>` in every agent guard
+invocation; when using env vars, never pass `--server`.
 
 **Project**
 
