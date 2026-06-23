@@ -116,18 +116,18 @@ invocation; when using env vars, never pass `--server`.
 
 VS Code reads MCP config from exactly two places.
 
-- **Default: the user-level MCP config.** Open it with the
-  `MCP: Open User Configuration` command. On disk it lives in the VS Code
+- **Default: the user-level MCP config** — personal, not committed,
+  available across all workspaces. Open it with the
+  `MCP: Open User Configuration` command; on disk it lives in the VS Code
   user-profile folder:
   - macOS: `~/Library/Application Support/Code/User/mcp.json`
   - Linux: `~/.config/Code/User/mcp.json`
   - Windows: `%APPDATA%\Code\User\mcp.json`
-  Create it if missing (`{ "servers": {}, "inputs": [] }`). Servers here
-  are available across all workspaces.
+  Create it if missing (`{ "servers": {}, "inputs": [] }`).
 - Use the workspace **`.vscode/mcp.json`** ONLY if the user says "for
   this project" / "commit" / "share with the team" (shareable via git).
-  When installing there, write exclusively to the workspace file — do
-  NOT touch the user-level config.
+  Write exclusively to the workspace file — do NOT touch the user-level
+  config.
 - Do not ask which scope unless the user brings it up.
 
 ### Step 2: Inspect the MCP in the catalog
