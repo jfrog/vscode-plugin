@@ -274,7 +274,9 @@ report back, then act on what they report.
 1. **Ask the user to start the server.** VS Code detects the edited
    `mcp.json` and shows a **Start** action — tell the user to click the
    **Start** CodeLens above the server entry, or run `MCP: List Servers`
-   → select the server → **Start Server**.
+   → select the server → **Start Server**.  
+  If the server is already enabled and running (user-level entries sometimes start on their own),
+  don't ask the user to start it.
 2. **Tell the user they will be prompted for inputs.** On first start,
    VS Code prompts for each `${input:...}` value (Step 3) using its
    native secure input and stores it in the OS keychain. Tell the user
