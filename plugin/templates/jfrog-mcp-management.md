@@ -35,9 +35,11 @@ is set. Otherwise, use
      config) — reuse it.
   2. `JFROG_URL` + `JFROG_ACCESS_TOKEN` set in the env — use them and do
      NOT pass `--server` (the agent guard reads the env directly).
-  3. `~/.jfrog/jfrog-cli.conf.v6`: exactly one server → use it; two or
-     more → use the one with `"isDefault": true`; if none is marked
-     default → ASK the user which one. Then pass `--server <ID>`.
+  3. List configured servers with the jf CLI — `jf config show --format=json`
+     (do NOT parse `~/.jfrog/jfrog-cli.conf.v6`; the CLI masks tokens, so
+     its output is safe). Exactly one → use it; two or more → use the one
+     with `"isDefault": true`; if none is marked default → ASK the user
+     which one. Then pass `--server <ID>`.
   4. None of the above → ask the user to run `jf c add <ID>` or export
      `JFROG_URL` + `JFROG_ACCESS_TOKEN`, then retry.
 
@@ -88,11 +90,10 @@ unless absolutely necessary:
    agent guard can resolve credentials from these directly;
    DO NOT pass `--server` as that would make the agent guard try to
    parse the server details from the jf cli configuration.
-3. Else read `~/.jfrog/jfrog-cli.conf.v6`
-   (`%USERPROFILE%\.jfrog\jfrog-cli.conf.v6` on Windows) via a
-   terminal command (file-search skips hidden dirs).
-   NEVER print the full file contents as it can contain secrets.
-   Use the serverId subkeys:
+3. Else list configured servers with the jf CLI — run
+   `jf config show --format=json` (do NOT parse
+   `~/.jfrog/jfrog-cli.conf.v6` yourself; the CLI masks tokens, so its
+   output is safe to read). From the result:
    - exactly one server → use it without asking.
    - two or more → use the one with `"isDefault": true`; if none is
      marked default, list the `serverId`s and ASK the user which one.
@@ -266,30 +267,23 @@ value, while the file on disk shows only the placeholder.
 ### 4a: Start and verify the entry (mandatory)
 
 Writing the entry to `mcp.json` is not enough — the server still has to
-be started and must actually expose tools. Starting the server, entering
-inputs, and reading server status are all VS Code UI actions the agent
-**cannot** perform — so the agent must ask the user to do each step and
-report back, then act on what they report.
+be started and expose tools, which happens through VS Code's UI.
 
-1. **Ask the user to start the server.** VS Code detects the edited
-   `mcp.json` and shows a **Start** action — tell the user to click the
-   **Start** CodeLens above the server entry, or run `MCP: List Servers`
-   → select the server → **Start Server**.  
-  If the server is already enabled and running (user-level entries sometimes start on their own),
-  don't ask the user to start it.
-2. **Tell the user they will be prompted for inputs.** On first start,
-   VS Code prompts for each `${input:...}` value (Step 3) using its
-   native secure input and stores it in the OS keychain. Tell the user
-   which values to enter; required values must be supplied or the server
-   fails to start.
-3. **Ask the user to verify (mandatory).** Ask the user to open
-   `MCP: List Servers` and tell you whether the server is **Running**
-   AND exposes **at least one tool**. A server shown as Running but
-   reporting **0 tools** ("Discovered 0 tools") is NOT healthy — the
-   agent guard connected but the upstream MCP did not come up, so no
-   tools were exposed. NEVER report success when the user reports 0
-   tools; treat 0 tools as Failed and follow Troubleshooting
-   "Running but 0 tools".
+**If the server is already enabled and running, you're done — skip steps
+1–3 below.** (User-level entries sometimes start on their own.)
+
+Otherwise, ask the user to:
+
+1. **Start the server** — click the **Start** CodeLens above the
+   `mcp.json` entry, or `MCP: List Servers` → select it → **Start Server**.
+2. **Enter inputs when prompted** — on first start, VS Code asks for each
+   `${input:...}` value (Step 3) and stores it in the OS keychain.
+   Required values must be supplied or the server fails to start.
+3. **Verify** — have the user confirm in `MCP: List Servers` that it's
+   **Running with at least one tool**. Running but **0 tools**
+   ("Discovered 0 tools") is NOT healthy — the agent guard started but the
+   upstream MCP didn't come up. NEVER report success on 0 tools; treat it
+   as Failed and follow Troubleshooting "Running but 0 tools".
 
 ### Step 5: Authenticate OAuth MCPs (auto, after Step 4)
 
