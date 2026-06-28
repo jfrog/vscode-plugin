@@ -20,16 +20,6 @@ const debug = (message) => {
 const env = (newName, oldName) =>
     process.env[newName] ?? process.env[oldName];
 
-// Validate JFROG_URL early to surface misconfigurations before the MCP server
-// attempts to connect and fails with a confusing DNS or double-slash error.
-const jfrogUrl = env("JFROG_URL", "JF_URL");
-if (!jfrogUrl) {
-  log("JFROG_URL is not set. The JFrog MCP server will be unreachable — set JFROG_URL to your Artifactory base URL (e.g. https://mycompany.jfrog.io) and restart.");
-}
-if (jfrogUrl?.endsWith("/")) {
-  log("JFROG_URL has a trailing slash. This produces a double-slash in the MCP URL and will silently fail — remove the trailing slash and restart.");
-}
-
 const forceDisabled =
     env("_JF_AGENT_GUARD_FORCE_DISABLE") === "true";
 const forceEnabled =
@@ -129,6 +119,17 @@ if (forceDisabled) {
   process.stdout.write("{}");
   process.exit(0);
 }
+
+// Validate JFROG_URL now that we know Agent Guard is active — surfaces
+// misconfigurations before the MCP server fails with a confusing error.
+if (!process.env.JFROG_URL && !process.env.JF_URL) {
+  log("JFROG_URL is not set. The JFrog MCP server will be unreachable — set JFROG_URL to your Artifactory base URL (e.g. https://mycompany.jfrog.io) and restart.");
+} else if (!process.env.JFROG_URL && process.env.JF_URL) {
+  log("JF_URL is set but the MCP server requires JFROG_URL — set JFROG_URL to your Artifactory base URL and restart.");
+} else if (process.env.JFROG_URL.endsWith("/")) {
+  log("JFROG_URL has a trailing slash. This produces a double-slash in the MCP URL and will silently fail — remove the trailing slash and restart.");
+}
+
 debug("Injecting instructions");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
