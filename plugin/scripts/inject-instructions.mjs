@@ -114,17 +114,10 @@ if (forceDisabled) {
   process.exit(0);
 }
 
-// Validate JFROG_URL before the Agent Guard gate: the static .mcp.json attaches
-// the JFrog MCP server regardless of whether Agent Guard is enabled, so these
-// warnings must surface even when the gate below exits early. We read
-// process.env.* directly (not the env() helper) on purpose — the helper
-// collapses JFROG_URL/JF_URL into one value, but .mcp.json only substitutes
-// ${JFROG_URL}, so we must distinguish "neither set", "only JF_URL set", and
-// "JFROG_URL has a trailing slash" to give an accurate, actionable message.
+// Validate JFROG_URL early to surface misconfigurations before the MCP server
+// attempts to connect and fails with a confusing DNS or double-slash error.
 if (!process.env.JFROG_URL && !process.env.JF_URL) {
   log("JFROG_URL is not set. The JFrog MCP server will be unreachable — set JFROG_URL to your Artifactory base URL (e.g. https://mycompany.jfrog.io) and restart.");
-} else if (!process.env.JFROG_URL && process.env.JF_URL) {
-  log("JF_URL is set but the MCP server requires JFROG_URL — set JFROG_URL to your Artifactory base URL and restart.");
 } else if (process.env.JFROG_URL.endsWith("/")) {
   log("JFROG_URL has a trailing slash. This produces a double-slash in the MCP URL and will silently fail — remove the trailing slash and restart.");
 }
