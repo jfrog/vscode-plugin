@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 // Logs go to stderr; stdout is reserved for the hook JSON payload.
 const debugEnabled = process.env.JF_AGENT_GUARD_DEBUG === "true";
-const log = (message) => console.error(`[jfrog-agent-guard] ${message}`);
+const log = (message) => console.error(message);
 const debug = (message) => {
   if (debugEnabled) log(message);
 };
