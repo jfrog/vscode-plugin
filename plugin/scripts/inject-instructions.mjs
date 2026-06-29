@@ -118,7 +118,7 @@ if (forceDisabled) {
 // attempts to connect and fails with a confusing DNS or double-slash error.
 if (!process.env.JFROG_URL && !process.env.JF_URL) {
   log("JFROG_URL is not set. The JFrog MCP server will be unreachable — set JFROG_URL to your Artifactory base URL (e.g. https://mycompany.jfrog.io) and restart.");
-} else if (process.env.JFROG_URL.endsWith("/")) {
+} else if (process.env.JFROG_URL?.endsWith("/")) {
   log("JFROG_URL has a trailing slash. This produces a double-slash in the MCP URL and will silently fail — remove the trailing slash and restart.");
 }
 
