@@ -126,7 +126,7 @@ if (!process.env.JFROG_URL) {
     },
   }));
   process.exit(0);
-} else if (process.env.JFROG_URL?.endsWith("/")) {
+} else if (process.env.JFROG_URL.endsWith("/")) {
   const trailingSlashWarning = "JFROG_URL has a trailing slash. This produces a double-slash in the MCP URL and will silently fail — remove the trailing slash and restart.";
   log(trailingSlashWarning);
   process.stdout.write(JSON.stringify({
