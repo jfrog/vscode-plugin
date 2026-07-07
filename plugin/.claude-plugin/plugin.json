@@ -1,7 +1,7 @@
 {
   "name": "jfrog",
   "description": "JFrog Platform integration with MCP, security skills, and supply-chain best practices",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "author": { "name": "JFrog", "url": "https://jfrog.com" },
   "hooks": "hooks/hooks.json"
 }
