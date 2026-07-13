@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "jfrog": {
-      "type": "http",
-      "url": "${JFROG_URL}/mcp"
+      "type": "stdio",
+      "command": "/Users/yanivt/Jfrog/agent-guard/agent-guard/agent-guard",
+      "env": {
+        "_JF_ARGS": "mcp=jfrog-mcp"
+      }
     }
   }
 }
