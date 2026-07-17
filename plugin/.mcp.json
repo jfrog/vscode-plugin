@@ -2,7 +2,7 @@
   "mcp": {
     "servers": {
       "jfrog": {
-        "url": "https://<JFROG_PLATFORM_URL>/mcp"
+        "url": "https://<JFROG_URL>/mcp"
       }
     }
   }
