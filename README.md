@@ -126,6 +126,19 @@ When an MCP server requires a sensitive configuration, the agent cannot set the 
 
 See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/docs/mcp-registry-troubleshooting).
 
+### The `jfrog` MCP server shows "Stopped"
+
+VS Code starts MCP servers on demand, so the `jfrog` server often shows **Stopped** until something needs it. This is expected — but if the tools aren't showing up, start it manually first: open the **MCP: List Servers** command (or the MCP view), select **jfrog**, and choose **Start Server**. Once it's running you'll see the `enable_jfrog_tools` tool (or the real JFrog tools once authenticated).
+
+### JFrog MCP tools don't appear after signing in
+
+The JFrog MCP is proxied by Agent Guard. Until you're authenticated it exposes a single `enable_jfrog_tools` tool; calling it opens the browser for a one-time authorization and then the real JFrog tools are added to the session. In VS Code / Copilot Chat two extra steps are sometimes needed before the agent can use them:
+
+- **Enable the tools in the tool picker.** Open the 🛠 **Configure Tools** panel and enable the `jfrog-mcp` server's tools — newly added tools are not selected automatically.
+- **Open a new chat.** A chat's tool set is fixed when it starts, so the tools that appeared after login only take effect in a new chat.
+
+If the agent keeps falling back to the `jf` CLI even though the JFrog tools are present, it usually means the tools aren't selected in the picker — enable them and start a new chat. An empty or login-only tool list means "call `enable_jfrog_tools`", not that the MCP is broken.
+
 ---
 
 ## Support
