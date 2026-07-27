@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/modules/vscode-session-start.mjs\" package-resolution",
+            "timeout": 7,
+            "statusMessage": "Routing package installs through JFrog Artifactory…"
+          }
+        ]
+      }
+    ]
+  }
+}
