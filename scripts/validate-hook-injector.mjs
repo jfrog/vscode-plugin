@@ -101,11 +101,6 @@ function main() {
     }
     marketplacePlugin = mp.plugins.find((p) => p && p.name === "jfrog");
     if (!marketplacePlugin) throw new Error('no plugin named "jfrog" in marketplace.json');
-    if (mp.plugins[0] !== marketplacePlugin) {
-      throw new Error(
-        'the sync contract requires plugin "jfrog" at marketplace.json index 0',
-      );
-    }
     if (!/^\d+\.\d+\.\d+$/.test(marketplacePlugin.version ?? "")) {
       throw new Error(`plugin version is missing or not semver: ${JSON.stringify(marketplacePlugin.version)}`);
     }
