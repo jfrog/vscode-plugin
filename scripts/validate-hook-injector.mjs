@@ -17,13 +17,28 @@
 // silent failure into a hard error.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const injector = path.join(repoRoot, "plugin", "scripts", "inject-instructions.mjs");
+const packageResolutionAdapter = path.join(
+  repoRoot,
+  "plugin",
+  "modules",
+  "vscode-session-start.mjs",
+);
 const templatesDir = path.join(repoRoot, "plugin", "templates");
 const hooksFile = path.join(repoRoot, "plugin", "hooks", "hooks.json");
 const marketplaceFile = path.join(repoRoot, "marketplace.json");
@@ -68,6 +83,12 @@ function main() {
   check("injector parses (node --check)", () => {
     execFileSync(process.execPath, ["--check", injector], { stdio: "pipe" });
   });
+  check("package-resolution adapter exists and parses", () => {
+    if (!existsSync(packageResolutionAdapter)) {
+      throw new Error(`missing vendored module: ${packageResolutionAdapter}`);
+    }
+    execFileSync(process.execPath, ["--check", packageResolutionAdapter], { stdio: "pipe" });
+  });
 
   // ---- Lint: manifests, hook wiring, and template read-path are consistent ----
   section("Lint (manifest & wiring)");
@@ -80,6 +101,11 @@ function main() {
     }
     marketplacePlugin = mp.plugins.find((p) => p && p.name === "jfrog");
     if (!marketplacePlugin) throw new Error('no plugin named "jfrog" in marketplace.json');
+    if (mp.plugins[0] !== marketplacePlugin) {
+      throw new Error(
+        'the sync contract requires plugin "jfrog" at marketplace.json index 0',
+      );
+    }
     if (!/^\d+\.\d+\.\d+$/.test(marketplacePlugin.version ?? "")) {
       throw new Error(`plugin version is missing or not semver: ${JSON.stringify(marketplacePlugin.version)}`);
     }
@@ -129,6 +155,41 @@ function main() {
       throw new Error(
         `no SessionStart command exactly matches ${JSON.stringify(expected)}`,
       );
+    }
+  });
+  check("package-resolution hook emits valid SessionStart JSON", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "jfrog-vscode-hook-"));
+    try {
+      const jfrogHome = path.join(home, ".jfrog");
+      mkdirSync(jfrogHome, { recursive: true });
+      writeFileSync(
+        path.join(jfrogHome, "agents-conf.json"),
+        JSON.stringify({ packageResolution: { enabled: true } }),
+      );
+      const stdout = execFileSync(
+        process.execPath,
+        [packageResolutionAdapter, "package-resolution"],
+        {
+          encoding: "utf8",
+          env: { ...process.env, HOME: home, PATH: "" },
+          input: JSON.stringify({
+            hook_event_name: "SessionStart",
+            session_id: "validation",
+            source: "new",
+            cwd: repoRoot,
+          }),
+        },
+      );
+      const payload = JSON.parse(stdout);
+      if (
+        payload?.hookSpecificOutput?.hookEventName !== "SessionStart" ||
+        typeof payload.hookSpecificOutput.additionalContext !== "string" ||
+        payload.hookSpecificOutput.additionalContext.length === 0
+      ) {
+        throw new Error("package-resolution hook emitted an invalid payload");
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 

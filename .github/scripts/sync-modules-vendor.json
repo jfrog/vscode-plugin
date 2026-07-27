@@ -1,0 +1,7 @@
+{
+  "repo": "jfrog/jfrog-agent-hooks",
+  "pin": "b680ef382997c57e806e59182bab0ebbfdec87dd",
+  "paths": [
+    "modules"
+  ]
+}
