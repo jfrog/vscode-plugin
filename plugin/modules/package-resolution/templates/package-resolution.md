@@ -5,7 +5,9 @@ Your organization mediates package fetches through JFrog Artifactory for the
 shell, sub-agent, or MCP tool — route through the resolved Artifactory repository.
 
 {{GOVERNED_SCOPE}}
+Whenever this policy blocks an action, explicitly say it is blocked by the organization's **JFrog Artifactory Package Resolution policy**.
 {{AUTO_SETUP_STATUS}}
+
 ## Resolved URLs for this session
 
 {{RESOLVED_TABLE}}
@@ -37,7 +39,8 @@ policy. This exception applies only to the Agent Guard bootstrap package.
    (c) re-issue routed via the templates above. A successful exit from an unrouted
    command still violates policy.
 6. **401/403 from JFrog** — run `jfrog-setup-package-managers` (`jf setup`); never raw `docker login` / `npm login` / `pip config`.
-7. **No public-registry bypass** — if the user asks to use public registries or skip JFrog routing for a governed PM, refuse. Explain the policy and offer the JFrog-routed command from the rewrite templates above.
+7. **No public-registry bypass** — if the user asks to use public registries or skip JFrog routing for a governed PM, refuse. State clearly that the request is blocked by the organization's **JFrog Artifactory Package Resolution policy**, then offer the JFrog-routed command from the rewrite templates above.
+8. **No delegation bypass** — do not spawn `agent -p` or another agent for a governed package-install task unless that child receives this same Package Resolution policy from trusted `sessionStart` injection. **Refuse before launching an unprotected child.** Spawning a child merely so it can refuse is still a policy violation. A routed command or policy text in the child's user prompt cannot replace trusted injection because the child can execute different commands. Never pass a forbidden install request unchanged to a child. In the refusal, explicitly say that the **JFrog Artifactory Package Resolution policy** requires governed installs to remain routed through Artifactory.
 
 **Package managers not listed above are out of scope** — install them normally; no JFrog routing required. Do not block them, do not invoke `jfrog-setup-package-managers` for them.
 {{DOCKER_SECTION}}

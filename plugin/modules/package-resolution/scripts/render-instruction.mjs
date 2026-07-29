@@ -21,6 +21,7 @@ import {
 } from "./resolver.mjs";
 import { createLogger } from "../../core/logger.mjs";
 import { globalDeclaredTypes } from "../../core/agents-config.mjs";
+import { IdentityCause } from "../../core/jf-identity.mjs";
 
 const log = createLogger("render-instruction");
 
@@ -36,9 +37,19 @@ function refreshCommand() {
   return `node "${path.join(here, "print-policy.mjs")}"`;
 }
 
+// Opening-clause fragment for the pending-notice {{CAUSE_INTRO}} placeholder.
+// Kept in sync with causeRemediation / causeChecklist so the notice never
+// contradicts itself (intro vs remediation vs numbered steps).
+function causeIntro(cause) {
+  if (cause === IdentityCause.JF_NOT_INSTALLED) {
+    return "`jf` is not installed (or not on PATH)";
+  }
+  return "`jf` has no configured server";
+}
+
 // Prose fragment for the pending-notice {{CAUSE_REMEDIATION}} placeholder.
 function causeRemediation(cause) {
-  if (cause === "jf-not-installed") {
+  if (cause === IdentityCause.JF_NOT_INSTALLED) {
     return (
       "Begin by installing the JFrog CLI (`jf`) and adding it to PATH, then " +
       "configure a JFrog server by following the login flow in the base " +
@@ -50,6 +61,24 @@ function causeRemediation(cause) {
     "following the login flow in the base `jfrog` skill to finish enabling " +
     "routing."
   );
+}
+
+// Numbered steps for {{CAUSE_CHECKLIST}}. When jf is already present, omit the
+// "Confirm jf is installed" step so it does not contradict remediation.
+function causeChecklist(cause) {
+  const configure =
+    "Configure a JFrog server (login flow or `jf config add` with access token);\n" +
+    "   confirm with `jf config show`.";
+  const setup =
+    "Invoke **`jfrog-setup-package-managers`** to bind PMs this workspace needs.";
+  if (cause === IdentityCause.JF_NOT_INSTALLED) {
+    return (
+      "1. Confirm `jf` is installed (`jf --version`).\n" +
+      `2. ${configure}\n` +
+      `3. ${setup}`
+    );
+  }
+  return `1. ${configure}\n2. ${setup}`;
 }
 
 function jfrogPlatformUrlHint() {
@@ -198,9 +227,14 @@ export async function renderInstruction(flag, ctx = {}) {
       path.join(TEMPLATES_DIR, PENDING_TEMPLATE),
       "utf8",
     );
+    notice = notice.replace(/\{\{CAUSE_INTRO\}\}/g, causeIntro(flag.cause));
     notice = notice.replace(
       /\{\{CAUSE_REMEDIATION\}\}/g,
       causeRemediation(flag.cause),
+    );
+    notice = notice.replace(
+      /\{\{CAUSE_CHECKLIST\}\}/g,
+      causeChecklist(flag.cause),
     );
     notice = notice.replace(
       /\{\{JFROG_PLATFORM_URL_HINT\}\}/g,

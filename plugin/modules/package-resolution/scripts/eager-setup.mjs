@@ -137,7 +137,9 @@ function statusNote({ configured, pending, deferred }) {
     );
   }
   if (configured.length) {
-    parts.push(`already configured this session: ${configured.join(", ")}`);
+    parts.push(
+      `already configured (cached, skipping re-setup): ${configured.join(", ")}`,
+    );
   }
   if (deferred.length) {
     parts.push(

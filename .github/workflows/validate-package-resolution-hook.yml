@@ -2,23 +2,21 @@
 # Licensed under the Apache License, Version 2.0
 # https://www.apache.org/licenses/LICENSE-2.0
 
-name: Validate hook injection
+name: Validate package resolution hook
 
 on:
   pull_request:
     branches: [main]
     paths:
-      - "plugin/scripts/inject-instructions.mjs"
-      - "plugin/templates/jfrog-mcp-management.md"
       - "plugin/hooks/hooks.json"
       - "plugin/modules/**"
       - "plugin/.claude-plugin/plugin.json"
       - "marketplace.json"
-      - "scripts/validate-hook-injector.mjs"
+      - "scripts/validate-package-resolution-hook.mjs"
 
 jobs:
   validate:
-    name: Validate hook injection
+    name: Validate package resolution hook
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,5 +27,5 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Run injector validation
-        run: node scripts/validate-hook-injector.mjs
+      - name: Validate hook assembly
+        run: node scripts/validate-package-resolution-hook.mjs
