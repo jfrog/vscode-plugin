@@ -16,7 +16,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 | Component | Feature | Description |
 | --- | --- | --- |
 | **MCP** | JFrog MCP server | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `${JFROG_URL}/mcp` (OAuth, no API keys). |
-| **Hook** | Agent Guard | Copilot manage MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
+| **Skill** | Agent Guard | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 
 ---
 
@@ -27,7 +27,7 @@ Before installing, make sure you have:
 - **JFrog host URL and access token** — Your JFrog platform URL and a valid access token.
 - **VS Code** — With the **GitHub Copilot Chat** extension installed and signed in.
 - **GitHub Copilot editor preview features enabled** (organizations only) — If your Copilot access is managed by a GitHub organization, an admin must navigate to **Settings → Copilot → Policies → Editor preview features** and set it to **Enabled**. Individual (non-org) Copilot users can skip this step.
-- **Node.js** (≥ 14) — with `npx` on your `PATH` 
+- **Node.js** (≥ 18) — with `npx` on your `PATH`
 - **JFrog CLI** (≥ 2.x, optional) — Recommended for `jf config add` authentication (see [Authentication](#authentication)).
 - **JFrog Platform access** (optional) — If you want to use the Agent Guard feature, your JFrog subscription needs to include the AI Catalog entitlement. Contact your JFrog account team if you're unsure whether it's enabled.
 - **JFrog project** (optional) — If you want to use the Agent Guard feature.
@@ -101,7 +101,7 @@ If you have never configured the JFrog CLI on this machine:
 
 ## Usage
 
-After authentication, open a workspace in VS Code. The session-start hook installs the governance file, the JFrog Agent Guard becomes active, and any MCP servers approved for your project become available to your Copilot agent. You can manage everything through natural language — no terminal commands required.
+After authentication, open a workspace in VS Code. The JFrog skills load on demand, the JFrog Agent Guard becomes active, and any MCP servers approved for your project become available to your Copilot agent. You can manage everything through natural language — no terminal commands required.
 
 ### Discover, inspect, and install MCPs
 
