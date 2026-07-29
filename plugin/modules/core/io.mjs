@@ -81,9 +81,9 @@ export function parseSessionId(stdinRaw) {
 // adapter uses this to no-op when a different harness invoked it.
 //
 // Cursor: cursor_version / agent_type. VS Code Copilot: SessionStart source=new.
-// Copilot CLI also uses startup/resume without a transcript_path. Claude uses
-// startup/resume with transcript_path. The Copilot check must precede the
-// generic Claude fields because VS Code also sends hook_event_name/session_id.
+// Claude: transcript_path / hook_event_name / session_id. The Copilot check must
+// precede the generic Claude fields because VS Code also sends hook_event_name
+// and session_id. VS Code currently documents "new" as its only source value.
 export function detectHarness(stdinRaw) {
   if (!stdinRaw) return null;
   try {
@@ -93,9 +93,7 @@ export function detectHarness(stdinRaw) {
       return "cursor";
     }
     const isCopilotSessionStart =
-      p.hook_event_name === "SessionStart" &&
-      (p.source === "new" ||
-        (["startup", "resume"].includes(p.source) && !p.transcript_path));
+      p.hook_event_name === "SessionStart" && p.source === "new";
     if (isCopilotSessionStart) {
       return "copilot";
     }
