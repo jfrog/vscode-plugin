@@ -16,41 +16,71 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      # Checkout the repository so workflow scripts and version files are available
+      # Full history so the "already released" check below can see existing tags.
       - uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Parse the commit message to determine whether this push should trigger a release
-      - name: Detect release tag in commit message
+      # Releasing is opt-in: only a merge whose commit message carries [major], [minor] or
+      # [patch] cuts one. The marker is purely a trigger — the version itself always comes from
+      # the manifest, so the bump is reviewable in the PR that makes it.
+      # The message is passed through env rather than interpolated into the script, so a commit
+      # subject can never inject shell.
+      - name: Detect release marker in commit message
         id: detect
+        env:
+          MSG: ${{ github.event.head_commit.message }}
         run: |
-          MSG="${{ github.event.head_commit.message }}"
-          if echo "$MSG" | grep -qE '\[(major|minor|patch)\]'; then
+          if printf '%s' "$MSG" | grep -qE '\[(major|minor|patch)\]'; then
             echo "triggered=true" >> "$GITHUB_OUTPUT"
           else
             echo "triggered=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Read the current version from the VERSION file
-      - name: Read version
+      # plugin/.claude-plugin/plugin.json is the canonical version for the plugin itself.
+      # marketplace.json carries its own copy for the marketplace listing, so the two are
+      # cross-checked here as well as by the validate-version PR check — a release is the last
+      # place a mismatch should get through.
+      - name: Read version from the plugin manifest
         if: steps.detect.outputs.triggered == 'true'
         id: version
-        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -er '.version' plugin/.claude-plugin/plugin.json)
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::plugin.json version '$VERSION' is not X.Y.Z — refusing to release"
+            exit 1
+          fi
+          MARKET_VERSION=$(jq -er '.plugins[] | select(.name == "jfrog") | .version' marketplace.json)
+          if [ "$VERSION" != "$MARKET_VERSION" ]; then
+            echo "::error::plugin.json is $VERSION but marketplace.json lists $MARKET_VERSION — sync them before releasing"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Create a semver git tag for the current version and push it to origin
+      # Catches the one mistake this flow allows: merging a release marker without bumping the
+      # manifests, which would otherwise try to re-tag a version that already shipped.
+      - name: Refuse to re-release an existing version
+        if: steps.detect.outputs.triggered == 'true'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG already exists — bump the plugin manifests before merging a release marker"
+            exit 1
+          fi
+
       - name: Create and push tag
         if: steps.detect.outputs.triggered == 'true'
         run: |
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          TAG="v${{ steps.version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
 
-      # Zip the repository contents (excluding .git and .github) into a release artifact
       - name: Package release artifact
         if: steps.detect.outputs.triggered == 'true'
         run: zip -r release.zip . --exclude ".git/*" --exclude ".github/*"
 
-      # Publish a GitHub Release for the new version tag, attaching the zip artifact and auto-generated notes
       - name: Create GitHub Release
         if: steps.detect.outputs.triggered == 'true'
         env:

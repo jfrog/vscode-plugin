@@ -11,22 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # This repo has two manifests that both carry the version: the plugin's own
+      # plugin/.claude-plugin/plugin.json, and marketplace.json which lists it for the
+      # marketplace. plugin.json is canonical; this check keeps marketplace.json in step with it
+      # so a release can't ship two different version numbers.
       - name: Check version consistency
         run: |
-          VERSION=$(cat VERSION)
-          FAILED=0
-
-          PLUGIN_VERSION=$(jq -r '.version' plugin/.claude-plugin/plugin.json)
-          if [ "$VERSION" != "$PLUGIN_VERSION" ]; then
-            echo "::error::Version mismatch: VERSION=$VERSION but plugin/.claude-plugin/plugin.json.version=$PLUGIN_VERSION"
-            FAILED=1
-          fi
-
-          MARKET_VERSION=$(jq -r '.plugins[0].version' marketplace.json)
+          set -euo pipefail
+          VERSION=$(jq -er '.version' plugin/.claude-plugin/plugin.json)
+          MARKET_VERSION=$(jq -er '.plugins[] | select(.name == "jfrog") | .version' marketplace.json)
           if [ "$VERSION" != "$MARKET_VERSION" ]; then
-            echo "::error::Version mismatch: VERSION=$VERSION but marketplace.json.plugins[0].version=$MARKET_VERSION"
-            FAILED=1
+            echo "::error::Version mismatch: plugin/.claude-plugin/plugin.json is $VERSION but marketplace.json lists $MARKET_VERSION"
+            exit 1
           fi
-
-          [ "$FAILED" -eq 0 ] && echo "All versions consistent: $VERSION"
-          exit $FAILED
+          echo "Versions consistent: $VERSION"

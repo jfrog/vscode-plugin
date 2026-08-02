@@ -17,10 +17,12 @@ All contributors must sign the [JFrog CLA](https://jfrog.com/cla/) before contri
 
 To cut a release:
 
-1. In your PR, bump `VERSION` and sync both `plugin/.claude-plugin/plugin.json` `.version` and `marketplace.json` `.plugins[0].version` to match. The `validate-version` PR check enforces this.
+1. In your PR, bump `.version` in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) and sync the matching entry in [`marketplace.json`](marketplace.json) to match. `plugin.json` is canonical; the `validate-version` PR check enforces that the two agree.
 2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` anywhere in the commit message.
 
-The release workflow reads `VERSION`, creates a `vX.Y.Z` git tag, and publishes a GitHub Release with a repo zip attached. No bot push to `main` — the version bump is part of the PR itself.
+The release workflow reads the version from `plugin.json`, creates a `vX.Y.Z` git tag, and publishes a GitHub Release with a repo zip attached. The marker only decides *whether* to release; the version comes from the manifest either way, so the bump is reviewed in the PR that makes it. There is no bot push to `main`.
+
+Merging a marker without bumping the manifests fails the release rather than re-tagging a shipped version.
 
 ## Reporting Issues
 
