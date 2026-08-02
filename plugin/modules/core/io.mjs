@@ -72,33 +72,35 @@ export function parseSessionId(stdinRaw) {
 }
 
 // Positively identify the harness that invoked this hook from its stdin
-// payload. Returns "cursor", "copilot", "claude_code", or null when it can't tell
-// (no stdin — e.g. terminal smoke tests — or an unrecognized shape).
+// payload. Returns "cursor", "copilot", "claude_code", or null when no harness
+// left a fingerprint (no stdin — e.g. terminal smoke tests — or a shape none of
+// them own).
 //
 // Why this matters: Cursor reads sessionStart hooks from BOTH
 // ~/.cursor/hooks.json AND ~/.claude/settings.json. Without this, a Cursor
 // session fires the Claude adapter too, double-injecting the policy. Each
 // adapter uses this to no-op when a different harness invoked it.
 //
-// Cursor: cursor_version / agent_type. VS Code Copilot: SessionStart source=new.
-// Claude: transcript_path / hook_event_name / session_id. The Copilot check must
-// precede the generic Claude fields because VS Code also sends hook_event_name
-// and session_id. VS Code currently documents "new" as its only source value.
+// Every branch below is a signal exactly one harness emits, and null means
+// "can't tell". An adapter is only ever registered by the harness it serves, so
+// an unrecognized payload is its own: guessing an owner here is what makes a
+// harness lose its injection, silently, the day it adds a field value.
 export function detectHarness(stdinRaw) {
   if (!stdinRaw) return null;
   try {
     const p = JSON.parse(stdinRaw);
     if (!p) return null;
+    // Cursor stamps its own version/agent on every hook payload.
     if (p.cursor_version || p.agent_type === "cursor") {
       return "cursor";
     }
-    const isCopilotSessionStart =
-      p.hook_event_name === "SessionStart" && p.source === "new";
-    if (isCopilotSessionStart) {
-      return "copilot";
-    }
-    if (p.transcript_path || p.hook_event_name || p.session_id) {
+    // Claude writes a transcript for every session; VS Code Copilot has none.
+    if (p.transcript_path) {
       return "claude_code";
+    }
+    // VS Code Copilot SessionStart, documented today as always source="new".
+    if (p.hook_event_name === "SessionStart" && p.source === "new") {
+      return "copilot";
     }
   } catch {
     // stdin wasn't JSON — can't tell.
