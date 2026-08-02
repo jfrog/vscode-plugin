@@ -44,6 +44,22 @@ function causeIntro(cause) {
   if (cause === IdentityCause.JF_NOT_INSTALLED) {
     return "`jf` is not installed (or not on PATH)";
   }
+  if (cause === IdentityCause.JF_UNSUPPORTED_AUTH) {
+    return (
+      "`jf` has a configured server, but its auth method is not supported " +
+      "(need an access token or username + password / API key)"
+    );
+  }
+  if (cause === IdentityCause.JF_AUTH_FAILED) {
+    return (
+      "`jf` credentials were rejected by Artifactory (expired, revoked, or wrong)"
+    );
+  }
+  if (cause === IdentityCause.JF_UNREACHABLE) {
+    return (
+      "Artifactory did not respond to a readiness probe (network / URL / outage)"
+    );
+  }
   return "`jf` has no configured server";
 }
 
@@ -54,6 +70,28 @@ function causeRemediation(cause) {
       "Begin by installing the JFrog CLI (`jf`) and adding it to PATH, then " +
       "configure a JFrog server by following the login flow in the base " +
       "`jfrog` skill."
+    );
+  }
+  if (cause === IdentityCause.JF_UNSUPPORTED_AUTH) {
+    return (
+      "The JFrog CLI is installed and a server is configured, but Agent " +
+      "Package Resolution only supports access-token or username + password " +
+      "/ API-key auth. Reconfigure with `jf config add` using one of those " +
+      "methods (SSH-key-only servers are not supported)."
+    );
+  }
+  if (cause === IdentityCause.JF_AUTH_FAILED) {
+    return (
+      "The JFrog CLI is installed and a server is configured, but Artifactory " +
+      "rejected the credentials. Refresh the access token or password / API " +
+      "key with `jf config add` / re-login, then retry."
+    );
+  }
+  if (cause === IdentityCause.JF_UNREACHABLE) {
+    return (
+      "The JFrog CLI is installed and a server is configured, but Artifactory " +
+      "did not answer a readiness probe. Confirm the platform URL, network, " +
+      "and that Artifactory is up, then retry."
     );
   }
   return (
@@ -67,16 +105,36 @@ function causeRemediation(cause) {
 // "Confirm jf is installed" step so it does not contradict remediation.
 function causeChecklist(cause) {
   const configure =
-    "Configure a JFrog server (login flow or `jf config add` with access token);\n" +
+    "Configure a JFrog server (login flow or `jf config add` with access " +
+    "token or username + password / API key);\n" +
     "   confirm with `jf config show`.";
+  const reconfigure =
+    "Reconfigure the server with a supported auth method (`jf config add` " +
+    "with access token or username + password / API key);\n" +
+    "   confirm with `jf config show`.";
+  const refreshCreds =
+    "Refresh credentials (`jf config add` / re-login) and confirm with " +
+    "`jf config show`.";
+  const checkReachable =
+    "Confirm the platform URL is reachable and Artifactory is healthy, " +
+    "then retry.";
   const setup =
-    "Invoke **`jfrog-setup-package-managers`** to bind PMs this workspace needs.";
+    "Invoke **`jfrog-setup-package-managers`** to bind package managers this workspace needs.";
   if (cause === IdentityCause.JF_NOT_INSTALLED) {
     return (
       "1. Confirm `jf` is installed (`jf --version`).\n" +
       `2. ${configure}\n` +
       `3. ${setup}`
     );
+  }
+  if (cause === IdentityCause.JF_UNSUPPORTED_AUTH) {
+    return `1. ${reconfigure}\n2. ${setup}`;
+  }
+  if (cause === IdentityCause.JF_AUTH_FAILED) {
+    return `1. ${refreshCreds}\n2. ${setup}`;
+  }
+  if (cause === IdentityCause.JF_UNREACHABLE) {
+    return `1. ${checkReachable}\n2. ${setup}`;
   }
   return `1. ${configure}\n2. ${setup}`;
 }
@@ -116,7 +174,7 @@ function rewriteBulletFor(type, resolved) {
   const r = resolved[type];
   if (!r) {
     return (
-      `- \`${type}\` — **unresolved** (no Artifactory repo for this PM yet). ` +
+      `- \`${type}\` — **unresolved** (no Artifactory repo for this package manager yet). ` +
       `Per hard rule #5, do not invent a URL: invoke \`jfrog-setup-package-managers\` ` +
       `for \`${type}\` BEFORE any direct command. Once the binding is recorded, ` +
       `route subsequent \`${type}\` commands through the resolved URL yourself.`
@@ -125,18 +183,28 @@ function rewriteBulletFor(type, resolved) {
   const url = r.baseUrl;
   switch (type) {
     case "npm":
-      return `- \`npm install <pkg>\` → \`npm install <pkg> --registry ${url}\``;
+      return (
+        `- \`npm install <pkg>\` → \`npm install <pkg> --registry ${url}\`\n` +
+        `- \`pnpm add <pkg>\` / \`pnpm install\` → \`pnpm add <pkg> --registry ${url}\``
+      );
     case "pypi":
       return (
         `- \`pip install <pkg>\` → \`pip install <pkg> --index-url ${url}\`\n` +
-        `- \`poetry add <pkg>\` → first \`poetry source add jfrog ${url} --priority=primary\``
+        `- \`pipenv install <pkg>\` → \`pipenv install <pkg> --pypi-mirror ${url}\`\n` +
+        `- \`uv add <pkg>\` → \`UV_DEFAULT_INDEX=${url} uv add <pkg>\` (or \`uv add --default-index ${url} <pkg>\`)\n` +
+        `- \`uv pip install <pkg>\` → \`uv pip install <pkg> --index-url ${url}\``
       );
     case "go":
       return `- \`go get <mod>\` → \`GOPROXY=${url},direct go get <mod>\``;
     case "docker":
-      return `- \`docker pull [<public-registry-host>/]acme/app:1.2\` → \`docker pull ${url}/acme/app:1.2\` (drop a leading PUBLIC registry host — \`docker.io\`, \`ghcr.io\`, \`quay.io\`, \`gcr.io\`, …. Leave \`localhost\`/\`127.0.0.1\`, private/internal registries, and the JFrog host itself as-is; if unsure, resolve the host — a private/loopback IP means internal, leave it)`;
+      return (
+        `- \`docker pull [<public-registry-host>/]acme/app:1.2\` → \`docker pull ${url}/acme/app:1.2\` (drop a leading PUBLIC registry host — \`docker.io\`, \`ghcr.io\`, \`quay.io\`, \`gcr.io\`, …. Leave \`localhost\`/\`127.0.0.1\`, private/internal registries, and the JFrog host itself as-is; if unsure, resolve the host — a private/loopback IP means internal, leave it)\n` +
+        `- \`podman pull …\` → same prefix rules as docker against \`${url}\``
+      );
     case "maven":
-      return `- \`mvn ...\` / \`gradle ...\` → config-driven; run \`jfrog-setup-package-managers\` if not yet bound.`;
+      return `- \`mvn ...\` → config-driven; run \`jfrog-setup-package-managers\` if not yet bound.`;
+    case "gradle":
+      return `- \`gradle ...\` → config-driven; run \`jfrog-setup-package-managers\` if not yet bound.`;
     case "helm":
       return `- \`helm ...\` → config-driven; run \`jfrog-setup-package-managers\` if not yet bound.`;
     case "nuget":
@@ -173,25 +241,26 @@ function buildDockerSection(governed, resolved) {
   return "\n## Docker (before any `docker pull`)\n\n" + body + "\n";
 }
 
-// Pending-mode scope line — the governed PMs are known from config alone (no
-// network / no resolution needed). Notes that matching PMs will be
+// Pending-mode scope line — the governed package managers are known from config
+// alone (no network / no resolution needed). Notes that matching package
+// managers will be
 // auto-configured once routing is ready. Does NOT claim any type is routed yet.
 function buildPendingGovernedScope() {
   const governed = globalDeclaredTypes();
   if (!governed.length) {
     return (
       "No package managers are declared for routing yet (`defaultGlobalRepos` is empty). " +
-      "Ask an admin which PMs to govern."
+      "Ask an admin which package managers to govern."
     );
   }
   return (
     `**Governed package managers (once ready):** ${governed.join(", ")}. ` +
-    "Package managers not listed are out of scope. Matching PMs may be auto-configured " +
+    "Package managers not listed are out of scope. Matching package managers may be auto-configured " +
     "via `jf setup` once a JFrog server is configured; nothing is routed until then."
   );
 }
 
-// "This policy governs only: …" scope line so the agent knows which PMs are in
+// "This policy governs only: …" scope line so the agent knows which package managers are in
 // scope and treats everything else as hands-off.
 function buildGovernedScope(governed) {
   if (!governed.length) {

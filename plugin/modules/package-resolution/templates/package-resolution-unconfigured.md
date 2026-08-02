@@ -28,7 +28,7 @@ Authoritative procedure:
 
 ## After setup — load the routing policy
 
-Once `jf` is configured and `jfrog-setup-package-managers` has bound the PMs,
+Once `jf` is configured and `jfrog-setup-package-managers` has bound the package managers,
 load the current routing policy by running:
 
 ```bash
