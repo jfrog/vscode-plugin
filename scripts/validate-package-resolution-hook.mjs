@@ -30,7 +30,86 @@ const marketplaceFile = path.join(repoRoot, "marketplace.json");
 const expectedCommand =
   'node "${CLAUDE_PLUGIN_ROOT}/modules/vscode-session-start.mjs" package-resolution';
 
+// Anything a developer or CI step may already have exported that would steer
+// the hook away from the behaviour under test — a kill switch or a redirected
+// JFrog home turns these checks red for reasons that have nothing to do with
+// the assembly.
+const STRIPPED_ENV = [
+  "JF_AGENT_PACKAGE_RESOLUTION_DISABLE",
+  "JF_AGENT_PACKAGE_RESOLUTION_ENABLED",
+  "JF_AGENT_PACKAGE_RESOLUTION_LOG_LEVEL",
+  "JF_AGENT_PACKAGE_RESOLUTION_LOG_FILE",
+  "JF_AGENT_IDENTITY_PROBE",
+  "JFROG_AGENT_HOOKS_LOG_FILE",
+  "JFROG_CLI_HOME_DIR",
+];
+
 const failures = [];
+
+/** Run the vendored adapter against a throwaway HOME and return its stdout JSON. */
+function runAdapter(home, extraEnv = {}) {
+  const env = { ...process.env, HOME: home, PATH: "", ...extraEnv };
+  for (const key of STRIPPED_ENV) {
+    if (!(key in extraEnv)) delete env[key];
+  }
+  const stdout = execFileSync(
+    process.execPath,
+    [adapter, "package-resolution"],
+    {
+      encoding: "utf8",
+      env,
+      input: JSON.stringify({
+        hook_event_name: "SessionStart",
+        session_id: "validation",
+        source: "new",
+        cwd: repoRoot,
+      }),
+    },
+  );
+  return JSON.parse(stdout);
+}
+
+function writeAgentsConf(home, config) {
+  const jfrogHome = path.join(home, ".jfrog");
+  mkdirSync(jfrogHome, { recursive: true });
+  writeFileSync(
+    path.join(jfrogHome, "agents-conf.json"),
+    JSON.stringify(config),
+  );
+}
+
+/** Minimal `jf` stand-in: only `jf config export` is needed to form an identity. */
+function installFakeJf(home, { url = "https://validation.jfrog.io" } = {}) {
+  const binDir = path.join(home, "bin");
+  mkdirSync(binDir, { recursive: true });
+  const blob = Buffer.from(
+    JSON.stringify({
+      url,
+      accessToken: "validation-token",
+      serverId: "validation",
+    }),
+  ).toString("base64");
+  const jf = path.join(binDir, "jf");
+  writeFileSync(
+    jf,
+    `#!/bin/sh\nif [ "$1" = "config" ] && [ "$2" = "export" ]; then printf %s '${blob}'; exit 0; fi\nexit 1\n`,
+    { mode: 0o755 },
+  );
+  return binDir;
+}
+
+function additionalContextOf(output) {
+  const hookOutput = output?.hookSpecificOutput;
+  if (
+    hookOutput?.hookEventName !== "SessionStart" ||
+    typeof hookOutput.additionalContext !== "string"
+  ) {
+    throw new Error(
+      `adapter emitted invalid SessionStart context: ${JSON.stringify(output)}`,
+    );
+  }
+  return hookOutput.additionalContext;
+}
 
 function check(label, fn) {
   try {
@@ -90,37 +169,47 @@ function main() {
     }
   });
 
-  check("adapter emits valid SessionStart context", () => {
+  check("adapter emits the unconfigured advisory when jf is absent", () => {
     const home = mkdtempSync(path.join(tmpdir(), "jfrog-vscode-hook-"));
     try {
-      const jfrogHome = path.join(home, ".jfrog");
-      mkdirSync(jfrogHome, { recursive: true });
-      writeFileSync(
-        path.join(jfrogHome, "agents-conf.json"),
-        JSON.stringify({ packageResolution: { enabled: true } }),
-      );
-      const stdout = execFileSync(
-        process.execPath,
-        [adapter, "package-resolution"],
-        {
-          encoding: "utf8",
-          env: { ...process.env, HOME: home, PATH: "" },
-          input: JSON.stringify({
-            hook_event_name: "SessionStart",
-            session_id: "validation",
-            source: "new",
-            cwd: repoRoot,
-          }),
+      writeAgentsConf(home, { packageResolution: { enabled: true } });
+      const context = additionalContextOf(runAdapter(home));
+      if (!context.includes("NOT READY")) {
+        throw new Error("expected the unconfigured advisory");
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  // The advisory and the routing policy come from different branches, and only
+  // the routing branch carries the Artifactory URLs this plugin exists to
+  // inject. Validating the advisory alone would pass with routing broken.
+  check("adapter emits the routing policy when a server is configured", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "jfrog-vscode-hook-"));
+    try {
+      writeAgentsConf(home, {
+        packageResolution: {
+          enabled: true,
+          verifyRepos: false,
+          defaultGlobalRepos: { npm: "npm-virtual" },
         },
+      });
+      const context = additionalContextOf(
+        runAdapter(home, {
+          PATH: installFakeJf(home),
+          // Documented production kill switch: keeps the readiness probe off
+          // the network so CI does not depend on a reachable platform.
+          JF_AGENT_IDENTITY_PROBE: "0",
+        }),
       );
-      const output = JSON.parse(stdout);
-      const hookOutput = output?.hookSpecificOutput;
-      if (
-        hookOutput?.hookEventName !== "SessionStart" ||
-        typeof hookOutput.additionalContext !== "string" ||
-        !hookOutput.additionalContext.includes("NOT READY")
-      ) {
-        throw new Error("adapter emitted invalid SessionStart context");
+      if (context.includes("NOT READY")) {
+        throw new Error("configured session still emitted the advisory");
+      }
+      if (!context.includes("npm-virtual")) {
+        throw new Error(
+          `routing policy missing the repo key: ${context.slice(0, 200)}`,
+        );
       }
     } finally {
       rmSync(home, { recursive: true, force: true });

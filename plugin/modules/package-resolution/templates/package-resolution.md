@@ -24,10 +24,15 @@ config and server-side Curation back this):
 
 ## Hard rules (apply to the governed package managers above)
 
-**Agent Guard ownership:** If a separate JFrog Agent Guard policy is present,
-commands that bootstrap `@jfrog/agent-guard` follow that policy's registry
-instructions. Do not re-route those commands through this package-resolution
-policy. This exception applies only to the Agent Guard bootstrap package.
+**Agent Guard bootstrap — the one exception to rule 7.** A command that installs
+`@jfrog/agent-guard` and no other package may carry the registry its own JFrog
+Agent Guard policy specifies, e.g. `npx --yes --registry <url> @jfrog/agent-guard …`
+or `npm install --registry <url> @jfrog/agent-guard`. Leave that registry alone.
+
+Nothing else is covered. If the command installs any other package, omits the
+explicit `@jfrog/agent-guard` argument, or points a general-purpose install at a
+non-JFrog host, rule 7 applies and you refuse. This exception never authorizes a
+public registry, and it never widens to another package.
 
 1. **Only URLs in the table above** — for the governed package managers, no default upstream registries, mirrors, or CDNs.
 2. **Never override flags the user typed** (`--registry`, `--index-url`, `GOPROXY=…`) — if the command already includes a routing flag, surface the conflict with policy and ask before changing the command. This applies only to flags already in the command, **not** to verbal requests in chat to bypass routing policy.

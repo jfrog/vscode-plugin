@@ -71,6 +71,16 @@ export function parseSessionId(stdinRaw) {
   }
 }
 
+// Claude's documented SessionStart sources. VS Code Copilot documents only
+// "new", so the two sets stay disjoint and neither can claim the other's
+// sessions.
+const CLAUDE_SESSION_SOURCES = new Set([
+  "startup",
+  "resume",
+  "clear",
+  "compact",
+]);
+
 // Positively identify the harness that invoked this hook from its stdin
 // payload. Returns "cursor", "copilot", "claude_code", or null when no harness
 // left a fingerprint (no stdin — e.g. terminal smoke tests — or a shape none of
@@ -81,10 +91,9 @@ export function parseSessionId(stdinRaw) {
 // session fires the Claude adapter too, double-injecting the policy. Each
 // adapter uses this to no-op when a different harness invoked it.
 //
-// Every branch below is a signal exactly one harness emits, and null means
+// Every branch below is a signal exactly one harness documents, and null means
 // "can't tell". An adapter is only ever registered by the harness it serves, so
-// an unrecognized payload is its own: guessing an owner here is what makes a
-// harness lose its injection, silently, the day it adds a field value.
+// a payload no harness claims is left to whichever adapter was invoked.
 export function detectHarness(stdinRaw) {
   if (!stdinRaw) return null;
   try {
@@ -98,9 +107,11 @@ export function detectHarness(stdinRaw) {
     if (p.transcript_path) {
       return "claude_code";
     }
-    // VS Code Copilot SessionStart, documented today as always source="new".
-    if (p.hook_event_name === "SessionStart" && p.source === "new") {
-      return "copilot";
+    if (p.hook_event_name === "SessionStart") {
+      // The two harnesses document disjoint source values, so a session that
+      // reaches here without a transcript is still attributable.
+      if (p.source === "new") return "copilot";
+      if (CLAUDE_SESSION_SOURCES.has(p.source)) return "claude_code";
     }
   } catch {
     // stdin wasn't JSON — can't tell.
@@ -110,7 +121,8 @@ export function detectHarness(stdinRaw) {
 
 /**
  * Workspace roots for this hook invocation.
- * Cursor: workspace_roots[]. Claude: payload cwd. Fallback: process.cwd().
+ * Cursor: workspace_roots[]. Claude and VS Code Copilot: payload cwd.
+ * Fallback: process.cwd().
  *
  * @param {string} [stdinRaw]
  * @returns {string[]}

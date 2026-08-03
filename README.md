@@ -28,7 +28,7 @@ Before installing, make sure you have:
 - **JFrog host URL and access token** — Your JFrog platform URL and a valid access token.
 - **VS Code** — With the **GitHub Copilot Chat** extension installed and signed in.
 - **GitHub Copilot editor preview features enabled** (organizations only) — If your Copilot access is managed by a GitHub organization, an admin must navigate to **Settings → Copilot → Policies → Editor preview features** and set it to **Enabled**. Individual (non-org) Copilot users can skip this step.
-- **Agent hooks enabled** — Set `"chat.useHooks": true` in VS Code settings.
+- **Agent plugins and hooks enabled** — Set both `"chat.plugins.enabled": true` and `"chat.useHooks": true` in VS Code settings. Enabling hooks alone still leaves the plugin unloaded.
 - **Node.js** (≥ 20) — available as `node` on your `PATH`
 - **JFrog CLI** (≥ 2.x, optional) — Recommended for `jf config add` authentication (see [Authentication](#authentication)).
 - **JFrog Platform access** (optional) — If you want to use the Agent Guard feature, your JFrog subscription needs to include the AI Catalog entitlement. Contact your JFrog account team if you're unsure whether it's enabled.

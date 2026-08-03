@@ -13,6 +13,8 @@ on:
       - "plugin/.claude-plugin/plugin.json"
       - "marketplace.json"
       - "scripts/validate-package-resolution-hook.mjs"
+      - ".github/scripts/sync-modules-vendor.json"
+      - ".github/scripts/sync-modules.mjs"
 
 jobs:
   validate:
