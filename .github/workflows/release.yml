@@ -79,6 +79,7 @@ jobs:
       # NOTE: this repo has no plugin-layout validator to gate the release on. The manifest
       # cross-check above is all there is. If a validator lands here, run it as a step at this
       # point so a bad layout can't be released.
+
       # git archive exports tracked files at HEAD, so nothing an earlier step happened to leave on
       # the runner can end up in the artifact. .github is excluded to match what users get.
       - name: Package release artifact
