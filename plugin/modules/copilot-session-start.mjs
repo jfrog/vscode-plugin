@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// VS Code Copilot SessionStart hook runner.
+// GitHub Copilot Chat SessionStart hook runner (installed via the VS Code
+// Copilot plugin — see jfrog/vscode-plugin).
 //
-// Usage: node vscode-session-start.mjs <capability>
-// Example: node vscode-session-start.mjs package-resolution
+// Usage: node copilot-session-start.mjs <capability>
+// Example: node copilot-session-start.mjs package-resolution
 //
 // stdout: JSON with hookSpecificOutput.additionalContext. "{}" is a no-op.
 
@@ -62,7 +63,7 @@ async function main() {
     log.warn("harness mismatch; wrong adapter invoked", {
       expected: HARNESS_ID,
       detected: harness,
-      adapter: "vscode-session-start",
+      adapter: "copilot-session-start",
     });
     writeNoOp();
     return;

@@ -23,12 +23,12 @@ const repoRoot = path.resolve(
   "..",
 );
 const pluginRoot = path.join(repoRoot, "plugin");
-const adapter = path.join(pluginRoot, "modules", "vscode-session-start.mjs");
+const adapter = path.join(pluginRoot, "modules", "copilot-session-start.mjs");
 const hooksFile = path.join(pluginRoot, "hooks", "hooks.json");
 const manifestFile = path.join(pluginRoot, ".claude-plugin", "plugin.json");
 const marketplaceFile = path.join(repoRoot, "marketplace.json");
 const expectedCommand =
-  'node "${CLAUDE_PLUGIN_ROOT}/modules/vscode-session-start.mjs" package-resolution';
+  'node "${CLAUDE_PLUGIN_ROOT}/modules/copilot-session-start.mjs" package-resolution';
 
 // Anything a developer or CI step may already have exported that would steer
 // the hook away from the behaviour under test — a kill switch or a redirected
