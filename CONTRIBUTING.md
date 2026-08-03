@@ -18,7 +18,10 @@ All contributors must sign the [JFrog CLA](https://jfrog.com/cla/) before contri
 To cut a release:
 
 1. In your PR, bump `.version` in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) and sync the matching entry in [`marketplace.json`](marketplace.json) to match. `plugin.json` is canonical; the `validate-version` PR check enforces that the two agree.
-2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` anywhere in the commit message.
+2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` in the commit **subject** — the first
+   line. A marker further down in the body is ignored on purpose: this repo squash-merges, and
+   GitHub pre-fills the squash body from the branch commits or the PR description, either of
+   which may quote a marker while only documenting it.
 
 The release workflow reads the version from `plugin.json`, creates a `vX.Y.Z` git tag, and publishes a GitHub Release with a repo zip attached. The marker only decides *whether* to release; the version comes from the manifest either way, so the bump is reviewed in the PR that makes it. There is no bot push to `main`.
 
