@@ -18,14 +18,19 @@ All contributors must sign the [JFrog CLA](https://jfrog.com/cla/) before contri
 To cut a release:
 
 1. In your PR, bump `.version` in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) and sync the matching entry in [`marketplace.json`](marketplace.json) to match. `plugin.json` is canonical; the `validate-version` PR check enforces that the two agree.
-2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` in the commit **subject** — the first
+2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` in the commit **subject** - the first
    line. A marker further down in the body is ignored on purpose: this repo squash-merges, and
    GitHub pre-fills the squash body from the branch commits or the PR description, either of
    which may quote a marker while only documenting it.
 
-The release workflow reads the version from `plugin.json`, creates a `vX.Y.Z` git tag, and publishes a GitHub Release with a repo zip attached. The marker only decides *whether* to release; the version comes from the manifest either way, so the bump is reviewed in the PR that makes it. There is no bot push to `main`.
+The marker only decides *whether* to release; the version comes from the manifest either way, so the bump is reviewed in the PR that makes it. There is no bot push to `main`. Merging a marker without bumping the manifests fails the release rather than re-tagging a shipped version.
 
-Merging a marker without bumping the manifests fails the release rather than re-tagging a shipped version.
+The workflow reads the version from `plugin.json`, confirms `marketplace.json` agrees, refuses to continue if that version is already tagged, packages the tracked files at `HEAD` (minus `.github/`) into `release.zip`, and creates the `vX.Y.Z` tag as part of publishing the GitHub Release.
+
+Two things to know before changing it:
+
+- There is no plugin-layout validator in this repo, so a release is gated only on the two manifests agreeing. If a validator is added, run it as a step inside the release job as well: a separate workflow triggered by the same push can be red while a release still goes out.
+- The tag is created by the release, not before it. `gh release create --target` does both in one API call, so a failed run can't leave a tag behind with no release attached to it.
 
 ## Reporting Issues
 
