@@ -6,7 +6,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/modules/copilot-session-start.mjs\" package-resolution",
-            "timeout": 7,
+            "timeout": 15,
             "statusMessage": "Routing package installs through JFrog Artifactory…"
           }
         ]

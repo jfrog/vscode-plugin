@@ -159,12 +159,18 @@ function main() {
 
   check("SessionStart runs only package resolution", () => {
     const config = JSON.parse(readFileSync(hooksFile, "utf8"));
-    const commands = (config?.hooks?.SessionStart ?? []).flatMap((entry) =>
-      (entry.hooks ?? []).map((hook) => hook.command),
+    const hooks = (config?.hooks?.SessionStart ?? []).flatMap(
+      (entry) => entry.hooks ?? [],
     );
+    const commands = hooks.map((hook) => hook.command);
     if (commands.length !== 1 || commands[0] !== expectedCommand) {
       throw new Error(
         `unexpected SessionStart commands: ${JSON.stringify(commands)}`,
+      );
+    }
+    if (hooks[0]?.timeout !== 15) {
+      throw new Error(
+        `expected a 15-second hook timeout, got ${hooks[0]?.timeout}`,
       );
     }
   });

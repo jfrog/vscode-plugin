@@ -115,7 +115,8 @@ then start a new chat after changing the configuration.
 The feature is fail-open for the chat session: disabled or unexpected failure
 returns an empty hook result instead of preventing Copilot from starting. An
 enabled but unconfigured installation injects a `NOT READY` advisory with setup
-instructions.
+instructions. The hook has a 15-second limit to accommodate a cold, verified
+repository lookup without delaying indefinitely.
 
 ### Discover, inspect, and install MCPs
 
