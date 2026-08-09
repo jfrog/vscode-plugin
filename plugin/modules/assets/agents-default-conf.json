@@ -1,0 +1,10 @@
+{
+  "logLevel": "info",
+  "packageResolution": {
+    "enabled": false,
+    "verifyRepos": true,
+    "cacheTtlDays": 7,
+    "defaultGlobalRepos": {},
+    "autoSetup": []
+  }
+}
