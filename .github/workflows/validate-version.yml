@@ -1,0 +1,27 @@
+# Copyright (c) JFrog Ltd. 2026
+name: Validate version
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # This repo has two manifests that both carry the version: the plugin's own
+      # plugin/.claude-plugin/plugin.json, and marketplace.json which lists it for the
+      # marketplace. plugin.json is canonical; this check keeps marketplace.json in step with it
+      # so a release can't ship two different version numbers.
+      - name: Check version consistency
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -er '.version' plugin/.claude-plugin/plugin.json)
+          MARKET_VERSION=$(jq -er '.plugins[] | select(.name == "jfrog") | .version' marketplace.json)
+          if [ "$VERSION" != "$MARKET_VERSION" ]; then
+            echo "::error::Version mismatch: plugin/.claude-plugin/plugin.json is $VERSION but marketplace.json lists $MARKET_VERSION"
+            exit 1
+          fi
+          echo "Versions consistent: $VERSION"
