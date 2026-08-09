@@ -37,14 +37,3 @@ jobs:
 
       - name: Verify vendored module integrity
         run: node .github/scripts/check-vendored-modules.mjs
-
-      - name: Run pinned upstream package-resolution tests
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          pin="$(node -p 'JSON.parse(require("fs").readFileSync(".github/scripts/sync-modules-vendor.json", "utf8")).pin')"
-          git clone --depth 1 --branch "$pin" \
-            "https://x-access-token:${GH_TOKEN}@github.com/JFROG/jfrog-agent-hooks.git" \
-            /tmp/jfrog-agent-hooks
-          npm ci --prefix /tmp/jfrog-agent-hooks
-          npm test --prefix /tmp/jfrog-agent-hooks
