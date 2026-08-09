@@ -214,11 +214,12 @@ function main() {
           JF_AGENT_IDENTITY_PROBE: "0",
           JFROG_TEST_HARNESS: "1",
           JFROG_TEST_IDENTITY_PROBE: "skip",
+          JFROG_AGENT_HOOKS_LOG_FILE: path.join(home, "hook.log"),
         }),
       );
       if (context.includes("NOT READY")) {
         throw new Error(
-          `configured session still emitted the advisory: ${context.slice(0, 500)}`,
+          `configured session still emitted the advisory: ${readFileSync(path.join(home, "hook.log"), "utf8")}`,
         );
       }
       if (!context.includes("npm-virtual")) {

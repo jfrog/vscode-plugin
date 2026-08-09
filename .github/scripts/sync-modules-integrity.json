@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pin": "4ed33ee742c1410a49958d8395139f7f331714ff",
+  "pin": "jfrog-agent-hooks/v0.9.0",
   "files": {
     "assets/agents-default-conf.json": "04aae9b1dcfc75271c3ed786adceea1635b0a1ae0be64fadd7b1111229f11f01",
     "claude-session-start.mjs": "2ca1edc6b939cdff6c5faa6ac4b69636e6e92bc7b079316e1fdee7c53c6e837b",
