@@ -4,7 +4,7 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -96,6 +96,33 @@ function installFakeJf(home, { url = "https://validation.jfrog.io" } = {}) {
     { mode: 0o755 },
   );
   return binDir;
+}
+
+function startFakeArtifactory(port, countFile) {
+  const server = spawn(
+    process.execPath,
+    [
+      "-e",
+      `
+        const http = require("node:http");
+        const fs = require("node:fs");
+        const countFile = ${JSON.stringify(countFile)};
+        http.createServer((req, res) => {
+          if (req.url === "/artifactory/api/repositories/npm-virtual") {
+            const count = Number(fs.readFileSync(countFile, "utf8") || "0") + 1;
+            fs.writeFileSync(countFile, String(count));
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ packageType: "npm" }));
+            return;
+          }
+          res.statusCode = 404;
+          res.end();
+        }).listen(${port}, "127.0.0.1");
+      `,
+    ],
+    { stdio: "ignore" },
+  );
+  return server;
 }
 
 function additionalContextOf(output) {
@@ -194,38 +221,54 @@ function main() {
   check("adapter emits the routing policy when a server is configured", () => {
     const home = mkdtempSync(path.join(tmpdir(), "jfrog-vscode-hook-"));
     try {
+      const port = 20000 + (process.pid % 1000);
+      const verifyCountFile = path.join(home, "verify-count");
+      writeFileSync(verifyCountFile, "0");
+      const server = startFakeArtifactory(port, verifyCountFile);
       writeAgentsConf(home, {
         packageResolution: {
           enabled: true,
-          verifyRepos: false,
+          verifyRepos: true,
           defaultGlobalRepos: { npm: "npm-virtual" },
         },
       });
-      const fakeJfBin = installFakeJf(home);
-      const context = additionalContextOf(
-        runAdapter(home, {
-          // Keep the host PATH after the isolated fake. Some platforms need
-          // system paths available to launch a script-backed executable.
-          PATH: [fakeJfBin, process.env.PATH]
-            .filter(Boolean)
-            .join(path.delimiter),
-          // Documented production kill switch: keeps the readiness probe off
-          // the network so CI does not depend on a reachable platform.
-          JF_AGENT_IDENTITY_PROBE: "0",
-          JFROG_TEST_HARNESS: "1",
-          JFROG_TEST_IDENTITY_PROBE: "skip",
-          JFROG_AGENT_HOOKS_LOG_FILE: path.join(home, "hook.log"),
-        }),
-      );
-      if (context.includes("NOT READY")) {
-        throw new Error(
-          `configured session still emitted the advisory: ${readFileSync(path.join(home, "hook.log"), "utf8")}`,
+      try {
+        const fakeJfBin = installFakeJf(home, {
+          url: `http://127.0.0.1:${port}`,
+        });
+        const context = additionalContextOf(
+          runAdapter(home, {
+            // Keep the host PATH after the isolated fake. Some platforms need
+            // system paths available to launch a script-backed executable.
+            PATH: [fakeJfBin, process.env.PATH]
+              .filter(Boolean)
+              .join(path.delimiter),
+            // Documented production kill switch: keeps the readiness probe off
+            // the network so CI does not depend on a reachable platform.
+            JF_AGENT_IDENTITY_PROBE: "0",
+            JFROG_TEST_HARNESS: "1",
+            JFROG_TEST_IDENTITY_PROBE: "skip",
+            JFROG_AGENT_HOOKS_LOG_FILE: path.join(home, "hook.log"),
+          }),
         );
-      }
-      if (!context.includes("npm-virtual")) {
-        throw new Error(
-          `routing policy missing the repo key: ${context.slice(0, 200)}`,
-        );
+        if (context.includes("NOT READY")) {
+          throw new Error(
+            `configured session still emitted the advisory: ${readFileSync(path.join(home, "hook.log"), "utf8")}`,
+          );
+        }
+        if (!context.includes("npm-virtual")) {
+          throw new Error(
+            `routing policy missing the verified repo key: ${context.slice(0, 200)}`,
+          );
+        }
+        const verifyCount = readFileSync(verifyCountFile, "utf8");
+        if (verifyCount !== "1") {
+          throw new Error(
+            `expected one repository verification per session, got ${verifyCount}`,
+          );
+        }
+      } finally {
+        server.kill();
       }
     } finally {
       rmSync(home, { recursive: true, force: true });
