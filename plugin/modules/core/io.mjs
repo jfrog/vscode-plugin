@@ -103,16 +103,15 @@ export function detectHarness(stdinRaw) {
     if (p.cursor_version || p.agent_type === "cursor") {
       return "cursor";
     }
-    // Claude writes a transcript for every session; VS Code Copilot has none.
-    if (p.transcript_path) {
-      return "claude_code";
-    }
     if (p.hook_event_name === "SessionStart") {
-      // The two harnesses document disjoint source values, so a session that
-      // reaches here without a transcript is still attributable.
+      // Copilot's documented `new` source is decisive. Current VS Code payloads
+      // also include a transcript_path, so path presence cannot classify Claude
+      // before the source is checked.
       if (p.source === "new") return "copilot";
       if (CLAUDE_SESSION_SOURCES.has(p.source)) return "claude_code";
     }
+    // Claude writes a transcript for non-SessionStart hooks too.
+    if (p.transcript_path) return "claude_code";
   } catch {
     // stdin wasn't JSON — can't tell.
   }

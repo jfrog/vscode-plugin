@@ -15,7 +15,10 @@ import { setLogContext, createLogger } from "./logger.mjs";
 const log = createLogger("run-capability");
 
 /** modules bundle root (parent of core/ and package-resolution/). */
-const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PLUGIN_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 
 /** Shipped capabilities — add a name here; folder layout must match convention. */
 const ALLOWLIST = new Set(["package-resolution"]);
@@ -36,7 +39,9 @@ function loadCapabilityModule(name) {
 }
 
 function hookDurMs(ctx) {
-  return typeof ctx.startedAtMs === "number" ? Date.now() - ctx.startedAtMs : undefined;
+  return typeof ctx.startedAtMs === "number"
+    ? Date.now() - ctx.startedAtMs
+    : undefined;
 }
 
 /**

@@ -32,10 +32,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { createLogger } from "../../core/logger.mjs";
-import {
-  loadAgentsConfig,
-  isAutoSetup,
-} from "../../core/agents-config.mjs";
+import { loadAgentsConfig, isAutoSetup } from "../../core/agents-config.mjs";
 import { getPlatformIdentity } from "../../core/jf-identity.mjs";
 import {
   prepareSessionResolve,
@@ -164,50 +161,47 @@ function statusNote({
   const parts = [];
   if (setupBusy && pending.length) {
     parts.push(
-      `zero-touch deferred (another jf setup is in progress) — will retry next session: ${pending.join(", ")}`,
+      `waiting to set up (another setup is already running; will try again next session): ${pending.join(", ")}`,
     );
   } else if (pending.length) {
-    parts.push(
-      `configuring in the background via \`jf setup\`: ${pending.join(", ")}`,
-    );
+    parts.push(`setting up in the background: ${pending.join(", ")}`);
   }
   if (configured.length) {
-    parts.push(
-      `already configured (cached, skipping re-setup): ${configured.join(", ")}`,
-    );
+    parts.push(`already set up: ${configured.join(", ")}`);
   }
   if (deferred.length) {
     parts.push(
-      `previously failed for ${deferred.join(", ")} — will retry after the cache ` +
-        `expires or once the repo/permission is fixed`,
+      `could not set up last time (will try again later): ${deferred.join(", ")}`,
     );
   }
   if (skippedMissing?.length) {
     parts.push(
-      `skipped (package manager binary not on PATH): ${skippedMissing.join(", ")}`,
+      `skipped (not installed on this machine): ${skippedMissing.join(", ")}`,
     );
   }
   if (skippedConflict?.length) {
     parts.push(
-      `skipped (existing config points at another registry — will not overwrite): ` +
-        `${skippedConflict.join(", ")}`,
+      `left unchanged (already using another JFrog / registry): ` +
+        `${skippedConflict.join(", ")}. Ask the user: "Switch to this JFrog ` +
+        `instance?" If they say yes, run \`jf setup <package-manager>\` ` +
+        `(with \`--server-id\` / \`--repo\` as needed) only for each approved ` +
+        `package manager — not bare \`jf setup\``,
     );
   }
   if (skippedUnsupported?.length) {
     parts.push(
-      `skipped (your installed JFrog CLI has no \`jf setup\` support for ` +
-        `${skippedUnsupported.join(", ")} — update the JFrog CLI to the latest ` +
-        `version to enable zero-touch setup for these)`,
+      `skipped (update the JFrog CLI to enable setup for): ` +
+        `${skippedUnsupported.join(", ")}`,
     );
   }
   if (skippedUnparsed?.length) {
     parts.push(
-      `skipped (could not parse \`jf setup --help\` output to confirm support for ` +
-        `${skippedUnparsed.join(", ")} — update or reinstall the JFrog CLI)`,
+      `skipped (could not check JFrog CLI setup support for): ` +
+        `${skippedUnparsed.join(", ")} — try updating the JFrog CLI`,
     );
   }
   if (!parts.length) return "";
-  return `> **Zero-touch package-manager setup** — ${parts.join("; ")}.`;
+  return `> **Package manager setup** — ${parts.join("; ")}.`;
 }
 
 /**
@@ -323,22 +317,32 @@ export async function orchestrateEagerSetup(ctx = {}) {
       }
       if (!supported.has(job.packageManager)) {
         skippedUnsupported.push(job.packageManager);
-        log.warn("eager skip: package manager unsupported by installed jf setup", {
-          type: job.type,
-          packageManager: job.packageManager,
-          hint: "update the JFrog CLI to the latest version",
-        });
+        log.warn(
+          "eager skip: package manager unsupported by installed jf setup",
+          {
+            type: job.type,
+            packageManager: job.packageManager,
+            hint: "update the JFrog CLI to the latest version",
+          },
+        );
         continue;
       }
       const conflict = detectSetupConflict(job.packageManager, url);
       if (conflict.conflict) {
-        skippedConflict.push(job.packageManager);
-        log.warn("eager skip: existing package-manager config points elsewhere", {
-          type: job.type,
-          packageManager: job.packageManager,
-          existingHost: conflict.existingHost,
-          targetHost: conflict.targetHost,
-        });
+        const hostHint =
+          conflict.existingHost && conflict.targetHost
+            ? ` (${conflict.existingHost} → ${conflict.targetHost})`
+            : "";
+        skippedConflict.push(`${job.packageManager}${hostHint}`);
+        log.warn(
+          "eager skip: existing package-manager config points elsewhere",
+          {
+            type: job.type,
+            packageManager: job.packageManager,
+            existingHost: conflict.existingHost,
+            targetHost: conflict.targetHost,
+          },
+        );
         continue;
       }
       const need = evaluateSetupNeed(receipt, {
@@ -351,7 +355,8 @@ export async function orchestrateEagerSetup(ctx = {}) {
       if (need.skip) {
         // "failed-deferred" = a still-failing entry within its TTL: don't retry
         // this session (no jf setup, no WARN), but surface it in the note.
-        if (need.reason === "failed-deferred") deferred.push(job.packageManager);
+        if (need.reason === "failed-deferred")
+          deferred.push(job.packageManager);
         else configured.push(job.packageManager);
         continue;
       }
@@ -647,7 +652,14 @@ function extractJfError(stdout, stderr) {
  * @returns {{ ok: true } | { ok: false, reason: string }}
  */
 function runJfSetup(packageManager, serverId, repoKey) {
-  const args = ["setup", packageManager, "--server-id", serverId, "--repo", repoKey];
+  const args = [
+    "setup",
+    packageManager,
+    "--server-id",
+    serverId,
+    "--repo",
+    repoKey,
+  ];
   const res = spawnSync("jf", args, {
     encoding: "utf8",
     timeout: PER_PACKAGE_MANAGER_TIMEOUT_MS,

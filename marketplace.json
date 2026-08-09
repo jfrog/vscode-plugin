@@ -9,7 +9,7 @@
     {
       "name": "jfrog",
       "description": "JFrog Platform integration with MCP, security skills, and supply-chain best practices",
-      "version": "1.0.13",
+      "version": "1.0.14",
       "source": "plugin",
       "categories": [
         "security",
@@ -21,15 +21,8 @@
         "agent-guard",
         "ai-catalog"
       ],
-      "platforms": [
-        "darwin",
-        "linux",
-        "windows"
-      ],
-      "requiredPermissions": [
-        "network",
-        "shell"
-      ]
+      "platforms": ["darwin", "linux", "windows"],
+      "requiredPermissions": ["network", "shell"]
     }
   ]
 }

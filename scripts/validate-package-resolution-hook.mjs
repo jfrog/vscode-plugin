@@ -201,16 +201,25 @@ function main() {
           defaultGlobalRepos: { npm: "npm-virtual" },
         },
       });
+      const fakeJfBin = installFakeJf(home);
       const context = additionalContextOf(
         runAdapter(home, {
-          PATH: installFakeJf(home),
+          // Keep the host PATH after the isolated fake. Some platforms need
+          // system paths available to launch a script-backed executable.
+          PATH: [fakeJfBin, process.env.PATH]
+            .filter(Boolean)
+            .join(path.delimiter),
           // Documented production kill switch: keeps the readiness probe off
           // the network so CI does not depend on a reachable platform.
           JF_AGENT_IDENTITY_PROBE: "0",
+          JFROG_TEST_HARNESS: "1",
+          JFROG_TEST_IDENTITY_PROBE: "skip",
         }),
       );
       if (context.includes("NOT READY")) {
-        throw new Error("configured session still emitted the advisory");
+        throw new Error(
+          `configured session still emitted the advisory: ${context.slice(0, 500)}`,
+        );
       }
       if (!context.includes("npm-virtual")) {
         throw new Error(

@@ -1,4 +1,5 @@
 # JFrog Plugin for VS Code
+
 The official JFrog plugin for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat**. The plugin connects your Copilot agent to the JFrog Platform with policy-governed MCP access, auto-installed governance instructions, and Agent Guard.
 
 Paste this into your browser:
@@ -13,11 +14,11 @@ vscode://chat-plugin/install?source=jfrog/vscode-plugin
 
 The JFrog plugin provides the following capabilities, grouped by component:
 
-| Component | Feature | Description |
-| --- | --- | --- |
-| **MCP** | JFrog MCP server | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `${JFROG_URL}/mcp` (OAuth, no API keys). |
-| **Skill** | Agent Guard | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
-| **Hook** | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session. |
+| Component | Feature                            | Description                                                                                                                                                                                                                                                        |
+| --------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MCP**   | JFrog MCP server                   | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `${JFROG_URL}/mcp` (OAuth, no API keys).                                                                                                                                                 |
+| **Skill** | Agent Guard                        | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
+| **Hook**  | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session.                                                                                                                                                                                      |
 
 ---
 
@@ -33,6 +34,7 @@ Before installing, make sure you have:
 - **JFrog CLI** (≥ 2.x, optional) — Recommended for `jf config add` authentication (see [Authentication](#authentication)).
 - **JFrog Platform access** (optional) — If you want to use the Agent Guard feature, your JFrog subscription needs to include the AI Catalog entitlement. Contact your JFrog account team if you're unsure whether it's enabled.
 - **JFrog project** (optional) — If you want to use the Agent Guard feature.
+
 ---
 
 ## Installation
@@ -69,9 +71,7 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 2. Add the following entry inside the top-level `{ ... }` object (don't forget a trailing comma if it isn't the last entry):
    ```json
    {
-     "chat.plugins.marketplaces": [
-       "https://github.com/jfrog/vscode-plugin/"
-     ]
+     "chat.plugins.marketplaces": ["https://github.com/jfrog/vscode-plugin/"]
    }
    ```
 3. Open the Extensions panel (`Cmd+Shift+X`) and search for `@agentPlugins jfrog/vscode-plugin`.
@@ -83,10 +83,10 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 
 ### 1. Set persistent environment variables
 
-| Variable | Description |
-| --- | --- |
-| `JFROG_URL` | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`) |
-| `JFROG_ACCESS_TOKEN` | Your JFrog access token |
+| Variable             | Description                                                                  |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`) |
+| `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                      |
 
 ### 2. Configure the JFrog CLI
 
@@ -98,8 +98,8 @@ If you have never configured the JFrog CLI on this machine:
    jf config add
    ```
 3. Follow the interactive prompts to enter the same JFrog platform URL and access token.
----
 
+---
 
 ## Usage
 
@@ -118,18 +118,22 @@ enabled but unconfigured installation injects a `NOT READY` advisory with setup
 instructions. The hook has a 15-second limit to accommodate a cold, verified
 repository lookup without delaying indefinitely.
 
+See the [user guide](docs/package-resolution-user-guide.md) for setup and the
+[administrator guide](docs/package-resolution-admin-guide.md) for rollout and
+governance configuration.
+
 ### Discover, inspect, and install MCPs
 
-| Ask the agent… | What happens |
-| --- | --- |
-| "Which MCP servers can I install?" | Returns all MCP servers approved for your current project that you can install. |
-| "What MCP servers do I already have?" | Returns only the MCP servers already installed on your machine. |
-| "Show me the details for the filesystem MCP server." | Returns detailed metadata, required configuration (environment variables, runtime arguments), and active tool policies for a given server. |
-| "Add the GitHub MCP server." | Installs an approved MCP server and syncs its tool policies locally. Secrets are requested via a CLI command — never in chat. |
-| "Update the environment variables for the Slack MCP." | Replaces the configuration for an already-installed server without removing and reinstalling it. |
-| "Remove the Slack MCP server." | Removes the server and its stored credentials from your local setup. Changes apply immediately. |
-| "Log in to the remote Jira MCP server using OAuth." | Authenticates with a remote HTTP-based MCP server (OAuth, API key, or bearer token). |
-| "Log out of the Jira MCP server." | Removes stored authentication credentials for a server. |
+| Ask the agent…                                        | What happens                                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Which MCP servers can I install?"                    | Returns all MCP servers approved for your current project that you can install.                                                            |
+| "What MCP servers do I already have?"                 | Returns only the MCP servers already installed on your machine.                                                                            |
+| "Show me the details for the filesystem MCP server."  | Returns detailed metadata, required configuration (environment variables, runtime arguments), and active tool policies for a given server. |
+| "Add the GitHub MCP server."                          | Installs an approved MCP server and syncs its tool policies locally. Secrets are requested via a CLI command — never in chat.              |
+| "Update the environment variables for the Slack MCP." | Replaces the configuration for an already-installed server without removing and reinstalling it.                                           |
+| "Remove the Slack MCP server."                        | Removes the server and its stored credentials from your local setup. Changes apply immediately.                                            |
+| "Log in to the remote Jira MCP server using OAuth."   | Authenticates with a remote HTTP-based MCP server (OAuth, API key, or bearer token).                                                       |
+| "Log out of the Jira MCP server."                     | Removes stored authentication credentials for a server.                                                                                    |
 
 ### How secrets are handled
 

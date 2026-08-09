@@ -1,8 +1,13 @@
 // Detect when zero-touch `jf setup` would silently repoint an existing
 // user-level package-manager config at a different Artifactory (or public
 // registry). Fail-safe: skip that package manager and surface it in the
-// session note — never overwrite without an explicit product "ask/overwrite"
-// path (not implemented here).
+// session note — never auto-overwrite; the note tells the agent to ask the
+// user, then run explicit `jf setup` only after they confirm.
+//
+// Ownership: this is an APR/hooks-layer guard. Do NOT "fix" silent-repoint
+// by changing jfrog-cli-artifactory / jfrog-cli-core `jf setup` writers —
+// those commands intentionally overwrite when the user (or skill) asks.
+// autoSetup is the unattended path that must refuse foreign hosts here.
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -77,7 +82,8 @@ export function parseNpmrcRegistries(body) {
   const scoped = [];
   for (const line of String(body || "").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";")) continue;
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";"))
+      continue;
     const m = trimmed.match(/^(@[^\s:]+:)?registry\s*=\s*(.+)$/i);
     if (m) (m[1] ? scoped : def).push(stripWrappedQuotes(m[2]));
   }
@@ -98,7 +104,8 @@ export function parsePipIndexUrls(body) {
   const out = [];
   for (const line of String(body || "").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";")) continue;
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";"))
+      continue;
     if (trimmed.startsWith("[")) continue;
     const m = trimmed.match(/^(?:extra-)?index-url\s*=\s*(.+)$/i);
     if (m) out.push(stripWrappedQuotes(m[1]));
@@ -116,15 +123,12 @@ export function pipConfigFileCandidates(h) {
   const out = [];
   if (process.env.PIP_CONFIG_FILE) out.push(process.env.PIP_CONFIG_FILE);
   if (process.platform === "win32") {
-    const appData =
-      process.env.APPDATA || path.join(h, "AppData", "Roaming");
+    const appData = process.env.APPDATA || path.join(h, "AppData", "Roaming");
     out.push(path.join(appData, "pip", "pip.ini"));
   }
   if (process.platform === "darwin") {
     // pip reads the macOS per-user path ahead of the XDG fallback.
-    out.push(
-      path.join(h, "Library", "Application Support", "pip", "pip.conf"),
-    );
+    out.push(path.join(h, "Library", "Application Support", "pip", "pip.conf"));
   }
   out.push(path.join(h, ".config", "pip", "pip.conf"));
   out.push(path.join(h, ".pip", "pip.conf"));
@@ -251,8 +255,11 @@ export function parseAuthIniHosts(body) {
   const out = [];
   for (const line of String(body || "").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";")) continue;
-    const m = trimmed.match(/^\/\/([^/\s]+)\/\S*:_(?:authToken|auth|password)\b/i);
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";"))
+      continue;
+    const m = trimmed.match(
+      /^\/\/([^/\s]+)\/\S*:_(?:authToken|auth|password)\b/i,
+    );
     if (m) out.push(m[1]);
   }
   return out;
@@ -341,7 +348,10 @@ function readPnpmRegistries(home) {
       const body = readFileSync(file, "utf8");
       registryUrls.push(...parseNpmrcRegistries(body));
       authHosts.push(...parseAuthIniHosts(body));
-      if (file.endsWith(`${path.sep}config.yaml`) || file.endsWith("config.yaml")) {
+      if (
+        file.endsWith(`${path.sep}config.yaml`) ||
+        file.endsWith("config.yaml")
+      ) {
         registryUrls.push(...parsePnpmConfigYamlRegistries(body));
       }
     } catch {
@@ -396,8 +406,7 @@ export function uvConfigFileCandidates(h) {
   const out = [];
   if (process.env.UV_CONFIG_FILE) out.push(process.env.UV_CONFIG_FILE);
   if (process.platform === "win32") {
-    const appData =
-      process.env.APPDATA || path.join(h, "AppData", "Roaming");
+    const appData = process.env.APPDATA || path.join(h, "AppData", "Roaming");
     out.push(path.join(appData, "uv", "uv.toml"));
   }
   out.push(path.join(h, ".config", "uv", "uv.toml"));
@@ -433,8 +442,7 @@ export function goEnvFileCandidates(h) {
   if (process.platform === "darwin") {
     out.push(path.join(h, "Library", "Application Support", "go", "env"));
   } else if (process.platform === "win32") {
-    const appData =
-      process.env.APPDATA || path.join(h, "AppData", "Roaming");
+    const appData = process.env.APPDATA || path.join(h, "AppData", "Roaming");
     out.push(path.join(appData, "go", "env"));
   }
   // Linux XDG + common fallback on all platforms
@@ -461,6 +469,281 @@ function readGoProxies(home) {
 }
 
 /**
+ * ID used by `jf setup maven` for the Artifactory mirror in settings.xml
+ * (jfrog-cli-core `maven.ArtifactoryMirrorID`). Setup repoints this mirror
+ * in place — it does not add a second one.
+ */
+export const ARTIFACTORY_MAVEN_MIRROR_ID = "artifactory-mirror";
+
+/**
+ * Strip XML comments so commented-out mirror blocks are not treated as active.
+ * @param {string} xml
+ * @returns {string}
+ */
+function stripXmlComments(xml) {
+  return String(xml || "").replace(/<!--[\s\S]*?-->/g, "");
+}
+
+/**
+ * Text content of a simple XML element body (plain text or one CDATA section).
+ * @param {string} inner
+ * @returns {string}
+ */
+function xmlElementText(inner) {
+  const s = String(inner || "");
+  const cdata = s.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+  if (cdata) return cdata[1].trim();
+  // Drop nested markup if present; mirror id/url are text nodes in practice.
+  return s.replace(/<[^>]+>/g, "").trim();
+}
+
+/**
+ * Extract the Artifactory mirror URL from a Maven settings.xml body.
+ * Only the mirror with id {@link ARTIFACTORY_MAVEN_MIRROR_ID} counts —
+ * that is what `jf setup maven` overwrites.
+ * @param {string} body
+ * @returns {string[]} zero or one URL
+ */
+export function parseMavenArtifactoryMirrorUrls(body) {
+  // Not a full XML DOM — strip comments + CDATA text extraction covers the
+  // failure modes that matter for conflict detection without a new dependency.
+  const xml = stripXmlComments(String(body || ""));
+  /** @type {string[]} */
+  const out = [];
+  const mirrorRe = /<mirror\b[^>]*>([\s\S]*?)<\/mirror>/gi;
+  let m;
+  while ((m = mirrorRe.exec(xml)) !== null) {
+    const block = m[1];
+    const idMatch = block.match(/<id\b[^>]*>([\s\S]*?)<\/id>/i);
+    if (!idMatch) continue;
+    if (xmlElementText(idMatch[1]) !== ARTIFACTORY_MAVEN_MIRROR_ID) continue;
+    const urlMatch = block.match(/<url\b[^>]*>([\s\S]*?)<\/url>/i);
+    if (urlMatch) {
+      const url = stripWrappedQuotes(xmlElementText(urlMatch[1]));
+      if (url) out.push(url);
+    }
+  }
+  return out;
+}
+
+/**
+ * Candidate Maven settings.xml paths (first existing wins).
+ * @param {string} h home directory
+ * @returns {string[]}
+ */
+export function mavenSettingsFileCandidates(h) {
+  return [path.join(h, ".m2", "settings.xml")];
+}
+
+/**
+ * @param {string} [home]
+ * @returns {string[]}
+ */
+function readMavenMirrorUrls(home) {
+  const h = resolveHome(home);
+  for (const file of mavenSettingsFileCandidates(h)) {
+    if (!existsSync(file)) continue;
+    try {
+      return parseMavenArtifactoryMirrorUrls(readFileSync(file, "utf8"));
+    } catch {
+      // try next
+    }
+  }
+  return [];
+}
+
+/**
+ * @param {string} child
+ * @param {string} parent
+ * @returns {boolean}
+ */
+function pathIsUnderOrEqual(child, parent) {
+  const c = path.resolve(child);
+  const p = path.resolve(parent);
+  return c === p || c.startsWith(p + path.sep);
+}
+
+/**
+ * True when `h` is the process home (production). Temp test homes must not
+ * inherit ambient GRADLE_USER_HOME / XDG_CONFIG_HOME outside the sandbox.
+ * @param {string} h
+ * @returns {boolean}
+ */
+function isProcessHome(h) {
+  return path.resolve(h) === path.resolve(resolveHome());
+}
+
+/**
+ * Fixed filename written by `jf setup gradle` under `$GRADLE_USER_HOME/init.d/`.
+ * (jfrog-cli-artifactory `gradle.InitScriptName`).
+ */
+export const ARTIFACTORY_GRADLE_INIT_SCRIPT = "jfrog.init.gradle";
+
+/**
+ * Drop Groovy/Java-style comments so commented-out `def artifactoryUrl`
+ * lines are not treated as active (same idea as Maven XML comment stripping).
+ * @param {string} body
+ * @returns {string}
+ */
+function stripGroovyComments(body) {
+  let s = String(body || "");
+  s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+  s = s.replace(/^\s*\/\/.*$/gm, "");
+  return s;
+}
+
+/**
+ * Parse `def artifactoryUrl = '…'` / `"…"` from a jfrog.init.gradle body.
+ * @param {string} body
+ * @returns {string[]}
+ */
+export function parseGradleArtifactoryUrls(body) {
+  /** @type {string[]} */
+  const out = [];
+  for (const line of stripGroovyComments(body).split(/\r?\n/)) {
+    // Allow optional trailing `// …` after the closing quote. Do not strip
+    // bare `//` inside the line — that would corrupt `https://` in the URL.
+    const m = line.match(
+      /^\s*def\s+artifactoryUrl\s*=\s*(['"])(.+?)\1\s*(?:\/\/.*)?$/,
+    );
+    if (m) {
+      const url = stripWrappedQuotes(m[2]);
+      if (url) out.push(url);
+    }
+  }
+  return out;
+}
+
+/**
+ * Candidate paths for the JFrog Gradle init script (first existing wins).
+ * @param {string} h home directory
+ * @returns {string[]}
+ */
+export function gradleInitFileCandidates(h) {
+  /** @type {string[]} */
+  const out = [];
+  const guh = process.env.GRADLE_USER_HOME;
+  if (guh && (pathIsUnderOrEqual(guh, h) || isProcessHome(h))) {
+    out.push(path.join(guh, "init.d", ARTIFACTORY_GRADLE_INIT_SCRIPT));
+  }
+  const fallback = path.join(
+    h,
+    ".gradle",
+    "init.d",
+    ARTIFACTORY_GRADLE_INIT_SCRIPT,
+  );
+  if (!out.includes(fallback)) out.push(fallback);
+  return out;
+}
+
+/**
+ * @param {string} [home]
+ * @returns {string[]}
+ */
+function readGradleArtifactoryUrls(home) {
+  const h = resolveHome(home);
+  for (const file of gradleInitFileCandidates(h)) {
+    if (!existsSync(file)) continue;
+    try {
+      const urls = parseGradleArtifactoryUrls(readFileSync(file, "utf8"));
+      if (urls.length) return urls;
+    } catch {
+      // try next
+    }
+  }
+  return [];
+}
+
+/**
+ * Source name used by `jf setup nuget` / `jf setup dotnet`
+ * (jfrog-cli-artifactory `dotnet.SourceName`).
+ */
+export const ARTIFACTORY_NUGET_SOURCE_NAME = "JFrogCli";
+
+/** @param {string} s */
+function escapeRegExp(s) {
+  return String(s).replace(/[\\^$*+?.()|[\]{}]/g, "\\$&");
+}
+
+/**
+ * Extract the JFrogCli package source URL from a NuGet.Config body.
+ * @param {string} body
+ * @returns {string[]}
+ */
+export function parseNugetJFrogCliSourceUrls(body) {
+  // Same as Maven: ignore commented-out <add …/> blocks.
+  const xml = stripXmlComments(String(body || ""));
+  /** @type {string[]} */
+  const out = [];
+  const key = escapeRegExp(ARTIFACTORY_NUGET_SOURCE_NAME);
+  // <add key="…" value="https://…" …/>  (attribute order may vary)
+  const re = new RegExp(
+    `<add\\b[^>]*\\bkey\\s*=\\s*["']${key}["'][^>]*\\bvalue\\s*=\\s*["']([^"']+)["'][^>]*\\/?>`,
+    "gi",
+  );
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const url = stripWrappedQuotes(m[1]);
+    if (url) out.push(url);
+  }
+  // value before key
+  const re2 = new RegExp(
+    `<add\\b[^>]*\\bvalue\\s*=\\s*["']([^"']+)["'][^>]*\\bkey\\s*=\\s*["']${key}["'][^>]*\\/?>`,
+    "gi",
+  );
+  while ((m = re2.exec(xml)) !== null) {
+    const url = stripWrappedQuotes(m[1]);
+    if (url) out.push(url);
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Candidate NuGet.Config paths (scan all that exist; first hit with JFrogCli wins via reader).
+ * @param {string} h home directory
+ * @returns {string[]}
+ */
+export function nugetConfigFileCandidates(h) {
+  /** @type {string[]} */
+  const out = [];
+  // dotnet default
+  out.push(path.join(h, ".nuget", "NuGet", "NuGet.Config"));
+  // nuget / XDG-style — only ambient XDG when under sandbox home or real HOME
+  const xdg = process.env.XDG_CONFIG_HOME;
+  if (xdg && (pathIsUnderOrEqual(xdg, h) || isProcessHome(h))) {
+    out.push(path.join(xdg, "NuGet", "NuGet.Config"));
+  }
+  out.push(path.join(h, ".config", "NuGet", "NuGet.Config"));
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA || path.join(h, "AppData", "Roaming");
+    if (pathIsUnderOrEqual(appData, h) || isProcessHome(h)) {
+      out.push(path.join(appData, "NuGet", "NuGet.Config"));
+    } else {
+      out.push(path.join(h, "AppData", "Roaming", "NuGet", "NuGet.Config"));
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {string} [home]
+ * @returns {string[]}
+ */
+function readNugetJFrogCliUrls(home) {
+  const h = resolveHome(home);
+  for (const file of nugetConfigFileCandidates(h)) {
+    if (!existsSync(file)) continue;
+    try {
+      const urls = parseNugetJFrogCliSourceUrls(readFileSync(file, "utf8"));
+      if (urls.length) return urls;
+    } catch {
+      // try next
+    }
+  }
+  return [];
+}
+
+/**
  * Whether running `jf setup <packageManager>` for `targetUrl` would repoint
  * an existing user-level registry away from another host.
  *
@@ -469,8 +752,12 @@ function readGoProxies(home) {
  * npm's userconfig — some `jf setup pnpm` builds still write via
  * `NPM_CONFIG_USERCONFIG`, so a foreign `.npmrc` must block pnpm too),
  * pip/pipenv (`PIP_CONFIG_FILE` / platform pip.conf), uv
- * (`UV_CONFIG_FILE` / uv.toml), go (platform GOENV paths).
- * Other package managers → no conflict detected (setup proceeds).
+ * (`UV_CONFIG_FILE` / uv.toml), go (platform GOENV paths), maven
+ * (`$HOME/.m2/settings.xml` mirror id `artifactory-mirror`), gradle
+ * (`$GRADLE_USER_HOME/init.d/jfrog.init.gradle`), nuget/dotnet
+ * (`JFrogCli` source in NuGet.Config).
+ * docker/podman/helm are additive logins (not default-registry overwrite) —
+ * left uncovered until product treats multi-host auth as a conflict.
  *
  * @param {string} packageManager
  * @param {string} targetUrl platform or package URL whose host is the target
@@ -495,7 +782,14 @@ export function detectSetupConflict(packageManager, targetUrl, opts = {}) {
     existing = readUvIndexes(opts.home);
   } else if (pm === "go") {
     existing = readGoProxies(opts.home);
+  } else if (pm === "maven" || pm === "mvn") {
+    existing = readMavenMirrorUrls(opts.home);
+  } else if (pm === "gradle") {
+    existing = readGradleArtifactoryUrls(opts.home);
+  } else if (pm === "nuget" || pm === "dotnet") {
+    existing = readNugetJFrogCliUrls(opts.home);
   } else {
+    // docker / podman / helm: additive registry login — not a silent default rewrite
     return { conflict: false };
   }
 

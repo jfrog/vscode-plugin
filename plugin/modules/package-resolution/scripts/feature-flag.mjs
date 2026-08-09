@@ -69,10 +69,18 @@ export async function isPackageResolutionEnabled() {
   const { identity, cause } = await getReadyPlatformIdentity();
   if (!identity) {
     log.debug("pending", { reason: "missing-identity", cause });
-    return { mode: "pending", reason: "missing-identity", identity: "none", cause };
+    return {
+      mode: "pending",
+      reason: "missing-identity",
+      identity: "none",
+      cause,
+    };
   }
 
-  log.debug("routing", { reason: "jf-config", identity: identityLabel(identity) });
+  log.debug("routing", {
+    reason: "jf-config",
+    identity: identityLabel(identity),
+  });
   return {
     mode: "routing",
     reason: "jf-config",

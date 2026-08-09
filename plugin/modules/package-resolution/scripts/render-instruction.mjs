@@ -51,14 +51,10 @@ function causeIntro(cause) {
     );
   }
   if (cause === IdentityCause.JF_AUTH_FAILED) {
-    return (
-      "`jf` credentials were rejected by Artifactory (expired, revoked, or wrong)"
-    );
+    return "`jf` credentials were rejected by Artifactory (expired, revoked, or wrong)";
   }
   if (cause === IdentityCause.JF_UNREACHABLE) {
-    return (
-      "Artifactory did not respond to a readiness probe (network / URL / outage)"
-    );
+    return "Artifactory did not respond to a readiness probe (network / URL / outage)";
   }
   return "`jf` has no configured server";
 }
@@ -265,8 +261,8 @@ function buildPendingGovernedScope() {
 function buildGovernedScope(governed) {
   if (!governed.length) {
     return (
-      "**This policy governs no package managers** (none declared in `defaultGlobalRepos` " +
-      "or the workspace file). Install packages normally; no JFrog routing required."
+      "**This policy governs no package managers** (none declared in " +
+      "`defaultGlobalRepos`). Install packages normally; no JFrog routing required."
     );
   }
   return (
@@ -327,8 +323,8 @@ export async function renderInstruction(flag, ctx = {}) {
     };
   }
 
-  // routing: resolve only the GOVERNED types (admin defaultGlobalRepos keys UNION
-  // workspace-declared keys) and build the table / bullets / docker section
+  // routing: resolve only the GOVERNED types (admin defaultGlobalRepos keys)
+  // and build the table / bullets / docker section
   // dynamically so ungoverned types disappear entirely (not blocked).
   await prepareSessionResolve({ workspaceRoots: ctx.workspaceRoots });
   const governed = governedPackageTypes();
