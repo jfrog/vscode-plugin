@@ -16,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -136,6 +136,96 @@ function additionalContextOf(output) {
     );
   }
   return hookOutput.additionalContext;
+}
+
+function checkVendoredSupportModules(home) {
+  const eagerSetup = pathToFileURL(
+    path.join(
+      pluginRoot,
+      "modules",
+      "package-resolution",
+      "scripts",
+      "eager-setup.mjs",
+    ),
+  ).href;
+  const receipt = pathToFileURL(
+    path.join(
+      pluginRoot,
+      "modules",
+      "package-resolution",
+      "scripts",
+      "eager-setup-receipt.mjs",
+    ),
+  ).href;
+  const conflict = pathToFileURL(
+    path.join(
+      pluginRoot,
+      "modules",
+      "package-resolution",
+      "scripts",
+      "setup-conflict.mjs",
+    ),
+  ).href;
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+        import assert from "node:assert/strict";
+        import { computeEligibleJobs } from ${JSON.stringify(eagerSetup)};
+        import {
+          applySetupResult,
+          evaluateSetupNeed,
+          receiptEntry,
+        } from ${JSON.stringify(receipt)};
+        import { detectSetupConflict } from ${JSON.stringify(conflict)};
+
+        const jobs = computeEligibleJobs(["npm"], {
+          npm: { repoKey: "npm-virtual" },
+        });
+        assert.deepEqual(
+          jobs.map(({ packageManager }) => packageManager),
+          ["npm", "pnpm"],
+        );
+
+        const receipt = { servers: {} };
+        applySetupResult(receipt, {
+          serverId: "validation",
+          url: "https://validation.jfrog.io",
+          packageManager: "npm",
+          repoKey: "npm-virtual",
+          status: "ok",
+        });
+        assert.equal(
+          receiptEntry(receipt, "validation", "npm").status,
+          "ok",
+        );
+        assert.deepEqual(
+          evaluateSetupNeed(receipt, {
+            serverId: "validation",
+            url: "https://validation.jfrog.io",
+            packageManager: "npm",
+            ttlDays: 7,
+            repoKey: "npm-virtual",
+          }),
+          { skip: true, reason: "receipt-hit" },
+        );
+
+        const conflict = detectSetupConflict(
+          "npm",
+          "https://validation.jfrog.io/artifactory/api/npm/npm-virtual",
+          { home: ${JSON.stringify(home)} },
+        );
+        assert.equal(conflict.conflict, true);
+      `,
+    ],
+    {
+      cwd: repoRoot,
+      env: { ...process.env, HOME: home },
+      stdio: "pipe",
+    },
+  );
 }
 
 function check(label, fn) {
@@ -274,6 +364,28 @@ function main() {
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  check(
+    "vendored eager-setup, receipt, and conflict modules behave correctly",
+    () => {
+      const home = mkdtempSync(path.join(tmpdir(), "jfrog-vscode-hook-"));
+      try {
+        writeAgentsConf(home, {
+          packageResolution: {
+            enabled: true,
+            autoSetup: ["npm"],
+          },
+        });
+        writeFileSync(
+          path.join(home, ".npmrc"),
+          "registry=https://registry.npmjs.org/\n",
+        );
+        checkVendoredSupportModules(home);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    },
+  );
 
   if (failures.length) {
     console.error(`\n${failures.length} check(s) failed.`);
