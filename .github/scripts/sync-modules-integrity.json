@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "pin": "jfrog-agent-hooks/v0.9.0",
+  "files": {
+    "assets/agents-default-conf.json": "04aae9b1dcfc75271c3ed786adceea1635b0a1ae0be64fadd7b1111229f11f01",
+    "claude-session-start.mjs": "2ca1edc6b939cdff6c5faa6ac4b69636e6e92bc7b079316e1fdee7c53c6e837b",
+    "copilot-session-start.mjs": "8811e0829c90ff0987bed158f5ef571195ee5eb54dfc8021b4396fe76ad8a499",
+    "core/agents-config.mjs": "3ade16fd6e08b8ac6cb8570edfbed1e9677b26d9c31513720680dd17513480af",
+    "core/io.mjs": "63ea75df635a4e15cf36f2158fe78ae42e3ca886abe267ee5ed2577042eb153d",
+    "core/jf-identity.mjs": "9d0301d4a60b9c9297cde24e0bab0c2660c56f831617f2b69db17c844276b19b",
+    "core/logger.mjs": "1ebdffcdf4af14b19e3ee8e82cfeb377fb9961a09d4e9d6ecdc922d07b0848c2",
+    "core/run-capability.mjs": "9fac890b7fd4866f9d3322469b2a7301e28cebfa3faebd77857f9f79d2d1c532",
+    "cursor-session-start.mjs": "37dd25ffee18e9f357e3cbb8453552766fd89295e85aa09bf93bc208df74aa20",
+    "package-resolution/scripts/eager-setup-receipt.mjs": "69213084bc1976ec63b346ca26e8a63eb713b0da7ad6ab4fc018934e70fef091",
+    "package-resolution/scripts/eager-setup.mjs": "d78fc422d15a271e9ae68b754a28fa72ea25a9e86b505b1a0e5e053add864c0d",
+    "package-resolution/scripts/feature-flag.mjs": "18b258e4d1999de31bad54a1f7f3c3f9cf65c598bbb83f328b45f68a739821f3",
+    "package-resolution/scripts/index.mjs": "f3ea8f71ecd156515a4a5eb14e33de5c61287f4f2e0e7ca90f9b7d010c4d6567",
+    "package-resolution/scripts/package-manager-family.mjs": "50d066910638e37c2375f696094fde1252181398be56c4218ca14342a76a34e5",
+    "package-resolution/scripts/print-policy.mjs": "02593c6e401006d226b908221d007ba9e1951a61c4cb060789877c1fe919faa2",
+    "package-resolution/scripts/render-instruction.mjs": "9e4205b5715e2c79515de19d473a6487d61971368103f2851388530ed0a180c4",
+    "package-resolution/scripts/repo-types.mjs": "b432bcdd6e77f80ca2c9dddfbf4d9e1299019758fd58b04b29fc21b18a86f788",
+    "package-resolution/scripts/resolver.mjs": "3485575a65fd5579420d69a51f723047d44f3cfa246511565c6e89ca32b02b4d",
+    "package-resolution/scripts/setup-conflict.mjs": "fdc589561813a9c5e708f50a20a87bacdad3f490158c973b12b217cb984e2845",
+    "package-resolution/scripts/workspace-config.mjs": "f8f8eaaf0fb8a0c3691938e99afebbc87d8779e508db0ef821fa23f0a55b786a",
+    "package-resolution/templates/package-resolution-unconfigured.md": "e7645b89d1c4d618fb45692de084d627ca24b5e2e975416176115d3c233e9c00",
+    "package-resolution/templates/package-resolution.md": "c305751d24fe352b6334a208f7831eb9db58704f1baa693c6921264f6a4456d1"
+  }
+}

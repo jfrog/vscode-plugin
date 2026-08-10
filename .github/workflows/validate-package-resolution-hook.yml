@@ -1,0 +1,39 @@
+# Copyright (c) JFrog Ltd. 2026
+# Licensed under the Apache License, Version 2.0
+# https://www.apache.org/licenses/LICENSE-2.0
+
+name: Validate package resolution hook
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "plugin/hooks/hooks.json"
+      - "plugin/modules/**"
+      - "plugin/.claude-plugin/plugin.json"
+      - "marketplace.json"
+      - "scripts/validate-package-resolution-hook.mjs"
+      - ".github/scripts/sync-modules-vendor.json"
+      - ".github/scripts/sync-modules.mjs"
+      - ".github/scripts/sync-modules-integrity.json"
+      - ".github/scripts/check-vendored-modules.mjs"
+      - ".github/workflows/validate-package-resolution-hook.yml"
+
+jobs:
+  validate:
+    name: Validate package resolution hook
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate hook assembly
+        run: node scripts/validate-package-resolution-hook.mjs
+
+      - name: Verify vendored module integrity
+        run: node .github/scripts/check-vendored-modules.mjs
