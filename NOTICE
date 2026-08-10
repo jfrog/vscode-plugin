@@ -1,0 +1,40 @@
+JFrog VS Code Plugin
+Copyright 2026 JFrog Ltd.
+
+This product includes software developed by JFrog Ltd. (https://jfrog.com).
+
+This product is licensed under the Apache License, Version 2.0. See the
+LICENSE file for the full license text.
+
+================================================================================
+Third-Party Content
+================================================================================
+
+This distribution includes vendored (pinned, committed-in-tree) content from
+the following JFrog-owned repositories. See VENDOR.md for how and why this
+content is vendored.
+
+--------------------------------------------------------------------------------
+jfrog-skills
+--------------------------------------------------------------------------------
+Homepage:  https://github.com/jfrog/jfrog-skills
+Copyright: Copyright JFrog Ltd.
+License:   Apache License, Version 2.0
+Vendored:  plugin/skills/
+
+--------------------------------------------------------------------------------
+jfrog-agent-hooks
+--------------------------------------------------------------------------------
+Homepage:  https://github.com/JFROG/jfrog-agent-hooks
+Copyright: Copyright JFrog Ltd.
+License:   Apache License, Version 2.0
+Vendored:  plugin/modules/
+
+--------------------------------------------------------------------------------
+@jfrog/agent-guard
+--------------------------------------------------------------------------------
+Homepage:  https://jfrog.com
+Copyright: Copyright JFrog Ltd.
+License:   Apache License, Version 2.0
+Usage:     Fetched at runtime via `npx` from JFrog's own npm registry
+           (see plugin/.mcp.json). Not vendored into this repository.

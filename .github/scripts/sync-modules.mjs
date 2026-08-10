@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Copyright (c) JFrog Ltd. 2026
+// Licensed under the Apache License, Version 2.0
+// https://www.apache.org/licenses/LICENSE-2.0
+//
 // Vendors modules bundle from jfrog-agent-hooks into plugin/.
 //
 // Usage:

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) JFrog Ltd. 2026
+// Licensed under the Apache License, Version 2.0
+// https://www.apache.org/licenses/LICENSE-2.0
 
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
