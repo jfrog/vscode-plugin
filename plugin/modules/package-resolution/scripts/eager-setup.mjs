@@ -51,6 +51,7 @@ import {
   packageManagerBinaryOnPath,
 } from "./package-manager-family.mjs";
 import { detectSetupConflict } from "./setup-conflict.mjs";
+import { envWithHookUserAgent } from "../../core/jf-user-agent.mjs";
 
 const log = createLogger("eager-setup");
 
@@ -603,9 +604,11 @@ export function releaseLock() {
  */
 function supportedPackageManagers() {
   try {
+    // --help is local (no Artifactory traffic); no UA needed for telemetry.
     const res = spawnSync("jf", ["setup", "--help"], {
       encoding: "utf8",
       timeout: 5000,
+      env: process.env,
     });
     const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
     const m = out.match(/Supported package managers are:\s*([^.\n]+)/i);
@@ -663,6 +666,7 @@ function runJfSetup(packageManager, serverId, repoKey) {
   const res = spawnSync("jf", args, {
     encoding: "utf8",
     timeout: PER_PACKAGE_MANAGER_TIMEOUT_MS,
+    env: envWithHookUserAgent(process.env),
   });
   if (res.error) {
     return { ok: false, reason: `spawn error: ${res.error.message}` };
