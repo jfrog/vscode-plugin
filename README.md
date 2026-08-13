@@ -122,6 +122,28 @@ See the [user guide](docs/package-resolution-user-guide.md) for setup and the
 [administrator guide](docs/package-resolution-admin-guide.md) for rollout and
 governance configuration.
 
+### Confirming it is installed
+
+Agent Package Resolution runs from a SessionStart hook:
+
+- **Start a new Copilot chat after installing the plugin.** Hooks are registered when the session starts, so a chat that was already open when you installed will not run it.
+- **The hook is not written into your own configuration.** It stays inside the plugin (`plugin/hooks/hooks.json`) and is merged at runtime — finding nothing in user settings does not mean the install failed.
+
+To confirm it is running, start a new chat and check the hook log:
+
+```bash
+tail ~/.jfrog/logs/agent-hooks.log
+```
+
+You should see one entry per session naming the mode it resolved to:
+
+| Mode | Meaning |
+| --- | --- |
+| `off` | Not enabled yet — expected until an admin or you turn it on (see the guides above) |
+| `pending` | Enabled, but JFrog identity is missing, unusable, or rejected — nothing is routed yet |
+| `routing` | Enabled and configured — packages resolve through Artifactory |
+
+For more detail, set `"logLevel": "debug"` in `~/.jfrog/agents-conf.json` and start another chat.
 ### Discover, inspect, and install MCPs
 
 | Ask the agent…                                        | What happens                                                                                                                               |
