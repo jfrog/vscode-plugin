@@ -16,7 +16,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 
 | Component | Feature                            | Description                                                                                                                                                                                                                                                        |
 | --------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **MCP**   | JFrog MCP server                   | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `${JFROG_URL}/mcp` (OAuth, no API keys).                                                                                                                                                 |
+| **MCP**   | JFrog MCP server                   | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `https://${env:JFROG_PLATFORM_URL}/mcp` (OAuth, no API keys).                                                                                                                                                 |
 | **Skill** | Agent Guard                        | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 | **Hook**  | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session.                                                                                                                                                                                      |
 
@@ -147,16 +147,16 @@ See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/
 
 ### The `jfrog` MCP server shows "Stopped"
 
-VS Code starts MCP servers on demand, so the `jfrog` server often shows **Stopped** until something needs it. This is expected — but if the tools aren't showing up, start it manually first: open the **MCP: List Servers** command (or the MCP view), select **jfrog**, and choose **Start Server**. Once it's running you'll see the `enable_jfrog_tools` tool (or the real JFrog tools once authenticated).
+VS Code starts MCP servers on demand, so the `jfrog` server often shows **Stopped** until something needs it. This is expected — but if the tools aren't showing up, start it manually first: open the **MCP: List Servers** command (or the MCP view), select **jfrog**, and choose **Start Server**. On first start VS Code opens the browser for a one-time OAuth authorization, after which the JFrog tools appear.
 
 ### JFrog MCP tools don't appear after signing in
 
-The JFrog MCP is proxied by Agent Guard. Until you're authenticated it exposes a single `enable_jfrog_tools` tool; calling it opens the browser for a one-time authorization and then the real JFrog tools are added to the session. In VS Code / Copilot Chat two extra steps are sometimes needed before the agent can use them:
+The JFrog MCP is a remote HTTP server the plugin attaches at `https://${env:JFROG_PLATFORM_URL}/mcp`; VS Code authorizes it over OAuth on first connect (no API keys). In VS Code / Copilot Chat two extra steps are sometimes needed before the agent can use the tools:
 
-- **Enable the tools in the tool picker.** Open the 🛠 **Configure Tools** panel and enable the `jfrog-mcp` server's tools — newly added tools are not selected automatically.
+- **Enable the tools in the tool picker.** Open the 🛠 **Configure Tools** panel and enable the `jfrog` server's tools — newly added tools are not selected automatically.
 - **Open a new chat.** A chat's tool set is fixed when it starts, so the tools that appeared after login only take effect in a new chat.
 
-If the agent keeps falling back to the `jf` CLI even though the JFrog tools are present, it usually means the tools aren't selected in the picker — enable them and start a new chat. An empty or login-only tool list means "call `enable_jfrog_tools`", not that the MCP is broken.
+If the agent keeps falling back to the `jf` CLI even though the JFrog tools are present, it usually means the tools aren't selected in the picker — enable them and start a new chat. Make sure `JFROG_PLATFORM_URL` is set in the IDE launch environment so `https://${env:JFROG_PLATFORM_URL}/mcp` resolves correctly.
 
 ---
 
