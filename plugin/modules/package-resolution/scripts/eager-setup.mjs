@@ -6,6 +6,9 @@
 //      need `jf setup` (per the receipt), spawn a DETACHED background worker for
 //      them, and return a short status note for the injected instruction. Never
 //      runs `jf setup` itself — injection must stay fast (< 7s hook budget).
+//      Exception: `JFROG_EAGER_SETUP_SYNC=1` waits for the worker, then
+//      re-reads the receipt so the note says `already set up` instead of
+//      `setting up in the background` (Consent Enable print-policy).
 //   2. WORKER (background, `node eager-setup.mjs --run <payload>`): take a
 //      global lock, re-check the receipt, run `jf setup <package-manager> --server-id --repo`
 //      one package manager at a time with a per-package-manager timeout, and
@@ -42,6 +45,7 @@ import {
 import {
   readReceipt,
   writeReceipt,
+  receiptEntry,
   evaluateSetupNeed,
   applySetupResult,
 } from "./eager-setup-receipt.mjs";
@@ -51,6 +55,7 @@ import {
   packageManagerBinaryOnPath,
 } from "./package-manager-family.mjs";
 import { detectSetupConflict } from "./setup-conflict.mjs";
+import { envWithHookUserAgent } from "../../core/jf-user-agent.mjs";
 
 const log = createLogger("eager-setup");
 
@@ -384,6 +389,29 @@ export async function orchestrateEagerSetup(ctx = {}) {
           "utf8",
         ).toString("base64");
         spawnWorker(payload, toRun.length);
+        if (process.env.JFROG_EAGER_SETUP_SYNC === "1") {
+          // spawnSync already waited. Re-bucket from the receipt so Consent
+          // Enable print-policy does not still say "setting up in the
+          // background" (that line is the agent's cue to rewrite with
+          // --registry / --index-url / GOPROXY). Use the receipt entry, not
+          // evaluateSetupNeed: ttl=0 would still look "needed" after a
+          // successful setup.
+          const after = await readReceipt();
+          pending.length = 0;
+          for (const job of toRun) {
+            const entry = receiptEntry(after, serverId, job.packageManager);
+            if (entry?.status === "ok" && entry.repoKey === job.repoKey) {
+              configured.push(job.packageManager);
+            } else if (
+              entry?.status === "failed" &&
+              entry.repoKey === job.repoKey
+            ) {
+              deferred.push(job.packageManager);
+            } else {
+              pending.push(job.packageManager);
+            }
+          }
+        }
       }
     }
 
@@ -603,9 +631,11 @@ export function releaseLock() {
  */
 function supportedPackageManagers() {
   try {
+    // --help is local (no Artifactory traffic); no UA needed for telemetry.
     const res = spawnSync("jf", ["setup", "--help"], {
       encoding: "utf8",
       timeout: 5000,
+      env: process.env,
     });
     const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
     const m = out.match(/Supported package managers are:\s*([^.\n]+)/i);
@@ -663,6 +693,7 @@ function runJfSetup(packageManager, serverId, repoKey) {
   const res = spawnSync("jf", args, {
     encoding: "utf8",
     timeout: PER_PACKAGE_MANAGER_TIMEOUT_MS,
+    env: envWithHookUserAgent(process.env),
   });
   if (res.error) {
     return { ok: false, reason: `spawn error: ${res.error.message}` };

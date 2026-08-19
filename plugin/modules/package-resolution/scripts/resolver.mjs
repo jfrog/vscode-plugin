@@ -24,6 +24,7 @@ import {
 import {
   getPlatformIdentity,
   authHeader,
+  isHttpsIdentityUrl,
   safeErrorMessage,
 } from "../../core/jf-identity.mjs";
 import { PACKAGE_TYPES, repoMatchesPackageType } from "./repo-types.mjs";
@@ -176,6 +177,10 @@ function normalizeCacheRoot(data) {
 
 async function fetchRepoConfig(repoKey, id, deadline) {
   if (!id) return null;
+  if (!isHttpsIdentityUrl(id)) {
+    log.warn("refusing repo verify over a non-HTTPS platform URL", { repoKey });
+    return null;
+  }
   const url = `${id.url}/artifactory/api/repositories/${encodeURIComponent(repoKey)}`;
   // Network call on session start (cache miss + verifyRepos) — log at info so a
   // fresh session's Artifactory calls are visible without enabling debug.
@@ -409,7 +414,16 @@ async function ensureSessionResolved(
   serverIdHint,
   verifyDeadline = Date.now() + REPO_VERIFY_BUDGET_MS,
 ) {
-  const id = identityOrNull();
+  const rawId = identityOrNull();
+  if (rawId && !isHttpsIdentityUrl(rawId)) {
+    log.warn("refusing to resolve package URLs over a non-HTTPS platform URL");
+    SESSION.serverId = effectiveServerId(serverIdHint, rawId);
+    SESSION.byType = {};
+    SESSION.meta = null;
+    return;
+  }
+
+  const id = rawId;
   const serverId = effectiveServerId(serverIdHint, id);
   if (SESSION.serverId === serverId && SESSION.byType) return;
 
@@ -457,6 +471,10 @@ async function applyWorkspaceOverlay(
   }
 
   const id = identityOrNull();
+  if (id && !isHttpsIdentityUrl(id)) {
+    log.warn("refusing workspace overlay over a non-HTTPS platform URL");
+    return;
+  }
   const base = id ? `${id.url}/artifactory` : "";
   const pr = loadAgentsConfig().packageResolution;
   const adminRepos = pr.defaultGlobalRepos ?? {};
@@ -595,7 +613,7 @@ if (isMain) {
   const type = process.argv[2];
   if (!type) {
     console.error("usage: node lib/resolver.mjs <type>");
-    console.error("       types: npm pypi maven go docker helm nuget");
+    console.error("       types: npm pypi maven gradle go docker helm nuget");
     process.exit(1);
   }
   const result = await resolve(type);
