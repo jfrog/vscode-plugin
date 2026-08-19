@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="3baecb0d-6307-4402-8009-34b9bee55fd4" name="Changes" comment="plugin-demo">
+      <change beforePath="$PROJECT_DIR$/.github/scripts/check-vendored-modules.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/.github/scripts/check-vendored-modules.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/scripts/sync-modules-integrity.json" beforeDir="false" afterPath="$PROJECT_DIR$/.github/scripts/sync-modules-integrity.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/scripts/sync-modules-vendor.json" beforeDir="false" afterPath="$PROJECT_DIR$/.github/scripts/sync-modules-vendor.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/scripts/sync-modules.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/.github/scripts/sync-modules.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/validate-package-resolution-hook.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/validate-package-resolution-hook.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/VENDOR.md" beforeDir="false" afterPath="$PROJECT_DIR$/VENDOR.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/marketplace.json" beforeDir="false" afterPath="$PROJECT_DIR$/marketplace.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plugin/.claude-plugin/plugin.json" beforeDir="false" afterPath="$PROJECT_DIR$/plugin/.claude-plugin/plugin.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plugin/hooks/hooks.json" beforeDir="false" afterPath="$PROJECT_DIR$/plugin/hooks/hooks.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/validate-package-resolution-hook.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/validate-package-resolution-hook.mjs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;arielamitjfrog&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:jfrog/vscode-plugin.git&quot;,
+    &quot;accountId&quot;: &quot;5d9d48cb-2ac9-4e7d-a356-ec1e841b48b5&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3HXucnwDpS2PbjggPQt1Ulu32jo" />
+  <component name="ProjectViewState">
+    <option name="autoscrollFromSource" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SONARLINT_PRECOMMIT_ANALYSIS": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "feature/MLD-1384-vscode-rewrite-mcp-json",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/arielam/jfrog-public/vscode-plugin",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/plugin/skills" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-34e2839f716b-intellij.indexing.shared.core-IU-262.9437.185" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="3baecb0d-6307-4402-8009-34b9bee55fd4" name="Changes" comment="" />
+      <created>1786026816239</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1786026816239</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="plugin-demo" />
+    <option name="LAST_COMMIT_MESSAGE" value="plugin-demo" />
+  </component>
+</project>

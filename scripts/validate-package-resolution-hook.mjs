@@ -24,11 +24,18 @@ const repoRoot = path.resolve(
 );
 const pluginRoot = path.join(repoRoot, "plugin");
 const adapter = path.join(pluginRoot, "modules", "copilot-session-start.mjs");
+const alignAdapter = path.join(
+  pluginRoot,
+  "scripts",
+  "vscode-align-mcp-json.mjs",
+);
 const hooksFile = path.join(pluginRoot, "hooks", "hooks.json");
 const manifestFile = path.join(pluginRoot, ".claude-plugin", "plugin.json");
 const marketplaceFile = path.join(repoRoot, "marketplace.json");
 const expectedCommand =
   'node "${CLAUDE_PLUGIN_ROOT}/modules/copilot-session-start.mjs" package-resolution';
+const expectedAlignCommand =
+  'node "${CLAUDE_PLUGIN_ROOT}/scripts/vscode-align-mcp-json.mjs" session-start';
 
 // Anything a developer or CI step may already have exported that would steer
 // the hook away from the behaviour under test — a kill switch or a redirected
@@ -99,15 +106,39 @@ function installFakeJf(home, { url = "https://validation.jfrog.io" } = {}) {
 }
 
 function startFakeArtifactory(port, countFile) {
+  const certFile = path.join(path.dirname(countFile), "localhost-cert.pem");
+  const keyFile = path.join(path.dirname(countFile), "localhost-key.pem");
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-subj",
+      "/CN=127.0.0.1",
+      "-keyout",
+      keyFile,
+      "-out",
+      certFile,
+      "-days",
+      "1",
+    ],
+    { stdio: "ignore" },
+  );
   const server = spawn(
     process.execPath,
     [
       "-e",
       `
-        const http = require("node:http");
+        const https = require("node:https");
         const fs = require("node:fs");
         const countFile = ${JSON.stringify(countFile)};
-        http.createServer((req, res) => {
+        https.createServer({
+          cert: fs.readFileSync(${JSON.stringify(certFile)}),
+          key: fs.readFileSync(${JSON.stringify(keyFile)}),
+        }, (req, res) => {
           if (req.url === "/artifactory/api/repositories/npm-virtual") {
             const count = Number(fs.readFileSync(countFile, "utf8") || "0") + 1;
             fs.writeFileSync(countFile, String(count));
@@ -246,6 +277,13 @@ function main() {
     execFileSync(process.execPath, ["--check", adapter], { stdio: "pipe" });
   });
 
+  check("MCP alignment adapter exists and parses", () => {
+    if (!existsSync(alignAdapter)) throw new Error(`missing: ${alignAdapter}`);
+    execFileSync(process.execPath, ["--check", alignAdapter], {
+      stdio: "pipe",
+    });
+  });
+
   let manifest;
   let marketplacePlugin;
   check("plugin and marketplace versions match", () => {
@@ -274,13 +312,17 @@ function main() {
     }
   });
 
-  check("SessionStart runs only package resolution", () => {
+  check("SessionStart runs package resolution and MCP alignment", () => {
     const config = JSON.parse(readFileSync(hooksFile, "utf8"));
     const hooks = (config?.hooks?.SessionStart ?? []).flatMap(
       (entry) => entry.hooks ?? [],
     );
     const commands = hooks.map((hook) => hook.command);
-    if (commands.length !== 1 || commands[0] !== expectedCommand) {
+    if (
+      commands.length !== 2 ||
+      commands[0] !== expectedCommand ||
+      commands[1] !== expectedAlignCommand
+    ) {
       throw new Error(
         `unexpected SessionStart commands: ${JSON.stringify(commands)}`,
       );
@@ -288,6 +330,15 @@ function main() {
     if (hooks[0]?.timeout !== 15) {
       throw new Error(
         `expected a 15-second hook timeout, got ${hooks[0]?.timeout}`,
+      );
+    }
+    if (
+      hooks[1]?.timeout !== 60 ||
+      hooks[1]?.statusMessage !==
+        "Securing plugin MCP servers with JFrog Agent Guard…"
+    ) {
+      throw new Error(
+        `unexpected MCP alignment hook: ${JSON.stringify(hooks[1])}`,
       );
     }
   });
@@ -324,7 +375,7 @@ function main() {
       });
       try {
         const fakeJfBin = installFakeJf(home, {
-          url: `http://127.0.0.1:${port}`,
+          url: `https://127.0.0.1:${port}`,
         });
         const context = additionalContextOf(
           runAdapter(home, {
@@ -338,6 +389,8 @@ function main() {
             JF_AGENT_IDENTITY_PROBE: "0",
             JFROG_TEST_HARNESS: "1",
             JFROG_TEST_IDENTITY_PROBE: "skip",
+            NODE_TLS_REJECT_UNAUTHORIZED: "0",
+            NODE_NO_WARNINGS: "1",
             JFROG_AGENT_HOOKS_LOG_FILE: path.join(home, "hook.log"),
           }),
         );
@@ -348,7 +401,7 @@ function main() {
         }
         if (!context.includes("npm-virtual")) {
           throw new Error(
-            `routing policy missing the verified repo key: ${context.slice(0, 200)}`,
+            `routing policy missing the verified repo key: ${context}`,
           );
         }
         const verifyCount = readFileSync(verifyCountFile, "utf8");

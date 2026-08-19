@@ -1,6 +1,14 @@
 {
   "repo": "JFROG/jfrog-agent-hooks",
-  "pin": "jfrog-agent-hooks/v0.9.0",
+  "pin": {
+    "base": "tag:jfrog-agent-hooks/v0.9.0",
+    "overlay": "commit:741c2ca9a4ea204a21bb13e72719a587f005856f"
+  },
   "paths": ["modules"],
+  "keep": [
+    "modules/core/agent-guard-check.mjs",
+    "modules/core/entry.mjs",
+    "modules/core/rewrite-mcp-json.mjs"
+  ],
   "dest_prefix": "plugin"
 }

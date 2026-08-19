@@ -1,14 +1,20 @@
 {
   "schemaVersion": 1,
-  "pin": "jfrog-agent-hooks/v0.9.0",
+  "pin": {
+    "base": "tag:jfrog-agent-hooks/v0.9.0",
+    "overlay": "commit:741c2ca9a4ea204a21bb13e72719a587f005856f"
+  },
   "files": {
     "assets/agents-default-conf.json": "04aae9b1dcfc75271c3ed786adceea1635b0a1ae0be64fadd7b1111229f11f01",
     "claude-session-start.mjs": "2ca1edc6b939cdff6c5faa6ac4b69636e6e92bc7b079316e1fdee7c53c6e837b",
     "copilot-session-start.mjs": "8811e0829c90ff0987bed158f5ef571195ee5eb54dfc8021b4396fe76ad8a499",
+    "core/agent-guard-check.mjs": "fd7fe9df640418b0df3296a67c33dfabed97f65e210f6e7abea5bce96fa68834",
     "core/agents-config.mjs": "3ade16fd6e08b8ac6cb8570edfbed1e9677b26d9c31513720680dd17513480af",
+    "core/entry.mjs": "0b0b218448151d7a06743c37e684d0933ab76225be5761f648627f4db02c1f17",
     "core/io.mjs": "63ea75df635a4e15cf36f2158fe78ae42e3ca886abe267ee5ed2577042eb153d",
     "core/jf-identity.mjs": "9d0301d4a60b9c9297cde24e0bab0c2660c56f831617f2b69db17c844276b19b",
     "core/logger.mjs": "1ebdffcdf4af14b19e3ee8e82cfeb377fb9961a09d4e9d6ecdc922d07b0848c2",
+    "core/rewrite-mcp-json.mjs": "a88733edd33bd146ed960c157e085f0b89a20882719c1d6daee5a56400322d86",
     "core/run-capability.mjs": "9fac890b7fd4866f9d3322469b2a7301e28cebfa3faebd77857f9f79d2d1c532",
     "cursor-session-start.mjs": "37dd25ffee18e9f357e3cbb8453552766fd89295e85aa09bf93bc208df74aa20",
     "package-resolution/scripts/eager-setup-receipt.mjs": "69213084bc1976ec63b346ca26e8a63eb713b0da7ad6ab4fc018934e70fef091",

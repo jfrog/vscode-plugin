@@ -17,6 +17,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 | Component | Feature                            | Description                                                                                                                                                                                                                                                        |
 | --------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **MCP**   | JFrog MCP server                   | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `${JFROG_URL}/mcp` (OAuth, no API keys).                                                                                                                                                 |
+| **Hook**  | MCP server alignment               | Secures installed plugins' `mcp.json` and `.mcp.json` server commands with JFrog Agent Guard at Copilot SessionStart.                                                                                                                                            |
 | **Skill** | Agent Guard                        | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 | **Hook**  | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session.                                                                                                                                                                                      |
 
@@ -121,6 +122,42 @@ repository lookup without delaying indefinitely.
 See the [user guide](docs/package-resolution-user-guide.md) for setup and the
 [administrator guide](docs/package-resolution-admin-guide.md) for rollout and
 governance configuration.
+
+### MCP server alignment
+
+At Copilot `SessionStart`, the plugin discovers MCP configuration files owned by
+installed agent plugins and passes them to Agent Guard's shared
+`--rewrite-mcp-json` pipeline. Agent Guard rewrites eligible server commands so
+they run through the configured JFrog project policy. The hook is fail-open and
+has a 60-second limit; disabled, unchanged, or failed rewrites do not block a
+chat.
+
+Discovery checks both `mcp.json` and `.mcp.json`, in that order, under
+`~/.copilot/installed-plugins/{marketplace}/{plugin}`,
+`~/.copilot/installed-plugins/_direct/{id}`, and
+`~/.vscode/agent-plugins/…`, plus this plugin's own configs next to the
+adaptor.
+
+Only plugin MCP configurations are considered. The hook never rewrites the user
+`Code/User/mcp.json` or a workspace `.vscode/mcp.json`.
+
+Environment controls:
+
+- `JF_AGENT_REWRITE_MCP_JSON_DISABLE=1` disables rewriting.
+- `JF_AGENT_REWRITE_MCP_JSON_FORCE=1` ignores the current-state marker and
+  forces a refresh.
+- `JF_ALIGN_MCP_JSON_ROOTS` replaces the default Copilot installed-plugins
+  and `~/.vscode/agent-plugins` roots (and skips this plugin's own configs).
+  Separate roots with colon or comma on macOS/Linux, and semicolon or
+  comma on Windows. Overrides may point outside the default, but discovery
+  still rejects `.vscode` and `Code/User` configs and symlinks escaping an
+  override root.
+
+If the alignment pipeline changes any discovered configuration bytes, even if
+the pipeline later times out or reports a failure, Copilot displays:
+`JFrog Agent Guard secured your plugins' MCP servers. Run Developer: Reload Window to reconnect.`
+Use the Command Palette command **Developer: Reload Window** before using the
+rewritten MCP servers.
 
 ### Discover, inspect, and install MCPs
 

@@ -10,11 +10,13 @@ on:
     paths:
       - "plugin/hooks/hooks.json"
       - "plugin/modules/**"
+      - "plugin/scripts/**"
       - "plugin/.claude-plugin/plugin.json"
       - "marketplace.json"
       - "scripts/validate-package-resolution-hook.mjs"
       - ".github/scripts/sync-modules-vendor.json"
       - ".github/scripts/sync-modules.mjs"
+      - ".github/scripts/sync-modules.test.mjs"
       - ".github/scripts/sync-modules-integrity.json"
       - ".github/scripts/check-vendored-modules.mjs"
       - ".github/workflows/validate-package-resolution-hook.yml"
@@ -34,6 +36,9 @@ jobs:
 
       - name: Validate hook assembly
         run: node scripts/validate-package-resolution-hook.mjs
+
+      - name: Test VS Code MCP alignment
+        run: node --test plugin/scripts/*.test.mjs .github/scripts/sync-modules.test.mjs
 
       - name: Verify vendored module integrity
         run: node .github/scripts/check-vendored-modules.mjs
