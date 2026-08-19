@@ -106,39 +106,15 @@ function installFakeJf(home, { url = "https://validation.jfrog.io" } = {}) {
 }
 
 function startFakeArtifactory(port, countFile) {
-  const certFile = path.join(path.dirname(countFile), "localhost-cert.pem");
-  const keyFile = path.join(path.dirname(countFile), "localhost-key.pem");
-  execFileSync(
-    "openssl",
-    [
-      "req",
-      "-x509",
-      "-newkey",
-      "rsa:2048",
-      "-nodes",
-      "-subj",
-      "/CN=127.0.0.1",
-      "-keyout",
-      keyFile,
-      "-out",
-      certFile,
-      "-days",
-      "1",
-    ],
-    { stdio: "ignore" },
-  );
   const server = spawn(
     process.execPath,
     [
       "-e",
       `
-        const https = require("node:https");
+        const http = require("node:http");
         const fs = require("node:fs");
         const countFile = ${JSON.stringify(countFile)};
-        https.createServer({
-          cert: fs.readFileSync(${JSON.stringify(certFile)}),
-          key: fs.readFileSync(${JSON.stringify(keyFile)}),
-        }, (req, res) => {
+        http.createServer((req, res) => {
           if (req.url === "/artifactory/api/repositories/npm-virtual") {
             const count = Number(fs.readFileSync(countFile, "utf8") || "0") + 1;
             fs.writeFileSync(countFile, String(count));
@@ -375,7 +351,7 @@ function main() {
       });
       try {
         const fakeJfBin = installFakeJf(home, {
-          url: `https://127.0.0.1:${port}`,
+          url: `http://127.0.0.1:${port}`,
         });
         const context = additionalContextOf(
           runAdapter(home, {
@@ -389,8 +365,6 @@ function main() {
             JF_AGENT_IDENTITY_PROBE: "0",
             JFROG_TEST_HARNESS: "1",
             JFROG_TEST_IDENTITY_PROBE: "skip",
-            NODE_TLS_REJECT_UNAUTHORIZED: "0",
-            NODE_NO_WARNINGS: "1",
             JFROG_AGENT_HOOKS_LOG_FILE: path.join(home, "hook.log"),
           }),
         );
@@ -401,7 +375,7 @@ function main() {
         }
         if (!context.includes("npm-virtual")) {
           throw new Error(
-            `routing policy missing the verified repo key: ${context}`,
+            `routing policy missing the verified repo key: ${context.slice(0, 200)}`,
           );
         }
         const verifyCount = readFileSync(verifyCountFile, "utf8");
