@@ -27,7 +27,7 @@ public or unverified repository.
 
 ## Enable routing
 
-An administrator must enable the feature and declare the package types:
+The shipped template turns Agent Package Resolution **on** (`enabled: true`) with empty bindings. An administrator (or `configure.mjs`) must declare the package types to govern:
 
 ```json
 {
@@ -39,6 +39,8 @@ An administrator must enable the feature and declare the package types:
   }
 }
 ```
+
+To keep APR off, deploy `"enabled": false` (and `"onboardingPrompt": "off"` if the file is still a shipped scaffold), or set `JF_AGENT_PACKAGE_RESOLUTION_DISABLE=1`. `"onboardingPrompt": "off"` alone only silences offers — it does not disable APR while `enabled` is `true`.
 
 Use repository keys that exist on the configured JFrog server. A workspace
 `.jfrog/local/package-resolution.json` can override an administrator-approved
