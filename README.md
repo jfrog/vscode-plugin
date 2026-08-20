@@ -83,10 +83,11 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 
 ### 1. Set persistent environment variables
 
-| Variable             | Description                                                                  |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`) |
-| `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                      |
+| Variable             | Description                                                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`). Used by the `jf` CLI and Agent Guard.                                  |
+| `JFROG_PLATFORM_URL` | Your JFrog platform host, **without** the scheme, e.g. `mycompany.jfrog.io`. Resolves the JFrog MCP server URL (`https://${env:JFROG_PLATFORM_URL}/mcp`). |
+| `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                                                                                             |
 
 ### 2. Configure the JFrog CLI
 

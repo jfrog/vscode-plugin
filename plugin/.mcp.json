@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "jfrog": {
-      "type":"http",
+      "type": "http",
       "url": "https://${env:JFROG_PLATFORM_URL}/mcp"
     }
   }
