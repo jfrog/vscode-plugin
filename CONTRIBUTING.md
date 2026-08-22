@@ -20,7 +20,7 @@ To cut a release:
 1. In your PR, bump `.version` in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) and sync the matching entry in [`marketplace.json`](marketplace.json) to match. `plugin.json` is canonical; the `validate-version` PR check enforces that the two agree.
 2. Merge to `main`. Every push to `main` compares the manifest version against the latest release tag: if the version is newer, a release proceeds; if it matches the latest tag, the workflow fails with a clear "already released" error; if it is older, it fails with a revert warning.
 
-The bump is reviewed in the PR that makes it. Merging without bumping the manifests fails the release rather than silently skipping or re-tagging a shipped version.
+This applies to **every** merge to `main`, including docs-only and chore changes: the bump is reviewed in the PR that makes it, and a merge that leaves both manifests untouched fails the `Release` workflow rather than silently skipping or re-tagging a shipped version. That failure is by design — it is the signal that the merge shipped without a version, not a broken workflow. Fix it by opening a follow-up PR that bumps both manifests.
 
 The workflow reads the version from `plugin.json`, confirms `marketplace.json` agrees, packages the tracked files at `HEAD` (minus `.github/`) into `release.zip`, and creates the `vX.Y.Z` tag as part of publishing the GitHub Release.
 
