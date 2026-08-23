@@ -108,10 +108,12 @@ After authentication, open a workspace in VS Code. The JFrog skills load on dema
 
 ### Agent Package Resolution
 
-When Agent Package Resolution is enabled in `~/.jfrog/agents-conf.json`, a
-SessionStart hook adds the resolved Artifactory repositories and package-routing
-rules to every new Copilot chat. Configure the JFrog CLI with `jf config add`,
-then start a new chat after changing the configuration.
+The shipped template enables Agent Package Resolution with empty repository
+bindings (nothing is routed until Consent Enable or an admin adds
+`defaultGlobalRepos`). When it is on, a SessionStart hook injects the resolved
+Artifactory repositories and package-routing policy into every new Copilot chat.
+Configure the JFrog CLI with `jf config add`, then start a new chat after
+changing the configuration.
 
 The feature is fail-open for the chat session: disabled or unexpected failure
 returns an empty hook result instead of preventing Copilot from starting. An
