@@ -24,6 +24,7 @@ import {
 import {
   getPlatformIdentity,
   authHeader,
+  isHttpsIdentityUrl,
   safeErrorMessage,
 } from "../../core/jf-identity.mjs";
 import { PACKAGE_TYPES, repoMatchesPackageType } from "./repo-types.mjs";
@@ -53,6 +54,8 @@ const SESSION = {
   serverId: null,
   meta: null,
   byType: null,
+  workspaceDeclaredTypes: [],
+  overlayPreparedFor: null,
 };
 
 function identityOrNull() {
@@ -176,6 +179,10 @@ function normalizeCacheRoot(data) {
 
 async function fetchRepoConfig(repoKey, id, deadline) {
   if (!id) return null;
+  if (!isHttpsIdentityUrl(id)) {
+    log.warn("refusing repo verify over a non-HTTPS platform URL", { repoKey });
+    return null;
+  }
   const url = `${id.url}/artifactory/api/repositories/${encodeURIComponent(repoKey)}`;
   // Network call on session start (cache miss + verifyRepos) — log at info so a
   // fresh session's Artifactory calls are visible without enabling debug.
@@ -409,7 +416,16 @@ async function ensureSessionResolved(
   serverIdHint,
   verifyDeadline = Date.now() + REPO_VERIFY_BUDGET_MS,
 ) {
-  const id = identityOrNull();
+  const rawId = identityOrNull();
+  if (rawId && !isHttpsIdentityUrl(rawId)) {
+    log.warn("refusing to resolve package URLs over a non-HTTPS platform URL");
+    SESSION.serverId = effectiveServerId(serverIdHint, rawId);
+    SESSION.byType = {};
+    SESSION.meta = null;
+    return;
+  }
+
+  const id = rawId;
   const serverId = effectiveServerId(serverIdHint, id);
   if (SESSION.serverId === serverId && SESSION.byType) return;
 
@@ -431,6 +447,7 @@ async function applyWorkspaceOverlay(
   workspaceRoots,
   verifyDeadline = Date.now() + REPO_VERIFY_BUDGET_MS,
 ) {
+  SESSION.workspaceDeclaredTypes = [];
   const roots = workspaceRoots?.length ? workspaceRoots : [];
   const pick = pickWorkspaceConfigRoot(roots);
 
@@ -457,22 +474,18 @@ async function applyWorkspaceOverlay(
   }
 
   const id = identityOrNull();
+  if (id && !isHttpsIdentityUrl(id)) {
+    log.warn("refusing workspace overlay over a non-HTTPS platform URL");
+    return;
+  }
   const base = id ? `${id.url}/artifactory` : "";
   const pr = loadAgentsConfig().packageResolution;
-  const adminRepos = pr.defaultGlobalRepos ?? {};
   const overridden = [];
+  const declared = [];
 
   const requested = Object.entries(ws.config.repositories).flatMap(
     ([type, repoKey]) => {
       if (!repoKey || !PACKAGE_TYPES.includes(type)) return [];
-      if (!adminRepos[type]) {
-        log.warn("workspace repo ignored; type is not admin-approved", {
-          type,
-          repoKey,
-          file: pick.configFile,
-        });
-        return [];
-      }
       return [{ type, repoKey }];
     },
   );
@@ -499,13 +512,17 @@ async function applyWorkspaceOverlay(
       });
       continue;
     }
+    if (!SESSION.byType) SESSION.byType = {};
     SESSION.byType[type] = {
       type,
       repoKey,
       baseUrl: urlFor(type, repoKey, base),
     };
     overridden.push(`${type}:${repoKey}`);
+    declared.push(type);
   }
+
+  SESSION.workspaceDeclaredTypes = declared;
 
   if (!overridden.length) {
     log.debug("workspace overlay skipped", {
@@ -531,25 +548,34 @@ async function applyWorkspaceOverlay(
 
 /**
  * Global cache resolve + optional workspace-local overlay (first root with a config file).
- * Call once per sessionStart before resolve(type) loops.
+ * Call once per sessionStart before resolve(type) loops. Eager setup and
+ * render both call this; the second call is a no-op for the same roots so
+ * overlay verification is not given a second 5s budget.
  */
 export async function prepareSessionResolve({ serverId, workspaceRoots } = {}) {
+  const overlayKey = JSON.stringify(workspaceRoots ?? []);
+  if (SESSION.overlayPreparedFor === overlayKey) return;
   const verifyDeadline = Date.now() + REPO_VERIFY_BUDGET_MS;
   await ensureSessionResolved(serverId, verifyDeadline);
   await applyWorkspaceOverlay(workspaceRoots, verifyDeadline);
+  SESSION.overlayPreparedFor = overlayKey;
 }
 
 /**
- * Governed (handled) package types for this session = admin-declared
- * (`defaultGlobalRepos` keys), ordered by PACKAGE_TYPES. Workspace files may
- * override only these administrator-approved types. A governed type whose repo
- * fails to resolve/verify stays governed (and blocks) rather than falling
- * through to a public registry.
+ * Governed package types for this session = admin-declared
+ * (`defaultGlobalRepos` keys) UNION workspace keys that actually resolved
+ * (`.jfrog/local`). Call after prepareSessionResolve so the workspace half is
+ * populated. Admin types that fail verify stay governed (and block). A
+ * workspace-only type that fails verify is dropped — not blocked, not
+ * autoSetup-eligible.
  * @returns {string[]}
  */
 export function governedPackageTypes() {
-  const declared = new Set(globalDeclaredTypes());
-  return PACKAGE_TYPES.filter((type) => declared.has(type));
+  const union = new Set([
+    ...globalDeclaredTypes(),
+    ...(SESSION.workspaceDeclaredTypes ?? []),
+  ]);
+  return PACKAGE_TYPES.filter((type) => union.has(type));
 }
 
 export async function resolve(type, { serverId: serverIdHint } = {}) {
@@ -581,6 +607,8 @@ export async function invalidateResolveCache(serverIdHint) {
   SESSION.serverId = null;
   SESSION.byType = null;
   SESSION.meta = null;
+  SESSION.workspaceDeclaredTypes = [];
+  SESSION.overlayPreparedFor = null;
   const serverId = effectiveServerId(serverIdHint);
   const { data } = await readCacheFile();
   const root = normalizeCacheRoot(data);
@@ -595,7 +623,7 @@ if (isMain) {
   const type = process.argv[2];
   if (!type) {
     console.error("usage: node lib/resolver.mjs <type>");
-    console.error("       types: npm pypi maven go docker helm nuget");
+    console.error("       types: npm pypi maven gradle go docker helm nuget");
     process.exit(1);
   }
   const result = await resolve(type);
