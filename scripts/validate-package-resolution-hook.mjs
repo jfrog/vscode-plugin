@@ -105,26 +105,62 @@ function installFakeJf(home, { url = "https://validation.jfrog.io" } = {}) {
   return binDir;
 }
 
-function startFakeArtifactory(port, countFile) {
+// resolver.mjs refuses to verify a repo over a non-HTTPS platform URL (never
+// send credentials in cleartext), so the fake Artifactory must terminate TLS —
+// a plain http server would make every verify attempt fail closed.
+function generateSelfSignedCert(dir) {
+  const keyPath = path.join(dir, "fake-artifactory-key.pem");
+  const certPath = path.join(dir, "fake-artifactory-cert.pem");
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-days",
+      "1",
+      "-nodes",
+      "-keyout",
+      keyPath,
+      "-out",
+      certPath,
+      "-subj",
+      "/CN=127.0.0.1",
+      "-addext",
+      "subjectAltName=IP:127.0.0.1",
+    ],
+    { stdio: "pipe" },
+  );
+  return { keyPath, certPath };
+}
+
+function startFakeArtifactory(port, countFile, { keyPath, certPath }) {
   const server = spawn(
     process.execPath,
     [
       "-e",
       `
-        const http = require("node:http");
+        const https = require("node:https");
         const fs = require("node:fs");
         const countFile = ${JSON.stringify(countFile)};
-        http.createServer((req, res) => {
-          if (req.url === "/artifactory/api/repositories/npm-virtual") {
-            const count = Number(fs.readFileSync(countFile, "utf8") || "0") + 1;
-            fs.writeFileSync(countFile, String(count));
-            res.setHeader("content-type", "application/json");
-            res.end(JSON.stringify({ packageType: "npm" }));
-            return;
-          }
-          res.statusCode = 404;
-          res.end();
-        }).listen(${port}, "127.0.0.1");
+        https.createServer(
+          {
+            key: fs.readFileSync(${JSON.stringify(keyPath)}),
+            cert: fs.readFileSync(${JSON.stringify(certPath)}),
+          },
+          (req, res) => {
+            if (req.url === "/artifactory/api/repositories/npm-virtual") {
+              const count = Number(fs.readFileSync(countFile, "utf8") || "0") + 1;
+              fs.writeFileSync(countFile, String(count));
+              res.setHeader("content-type", "application/json");
+              res.end(JSON.stringify({ packageType: "npm" }));
+              return;
+            }
+            res.statusCode = 404;
+            res.end();
+          },
+        ).listen(${port}, "127.0.0.1");
       `,
     ],
     { stdio: "ignore" },
@@ -341,7 +377,11 @@ function main() {
       const port = 20000 + (process.pid % 1000);
       const verifyCountFile = path.join(home, "verify-count");
       writeFileSync(verifyCountFile, "0");
-      const server = startFakeArtifactory(port, verifyCountFile);
+      const { keyPath, certPath } = generateSelfSignedCert(home);
+      const server = startFakeArtifactory(port, verifyCountFile, {
+        keyPath,
+        certPath,
+      });
       writeAgentsConf(home, {
         packageResolution: {
           enabled: true,
@@ -351,7 +391,7 @@ function main() {
       });
       try {
         const fakeJfBin = installFakeJf(home, {
-          url: `http://127.0.0.1:${port}`,
+          url: `https://127.0.0.1:${port}`,
         });
         const context = additionalContextOf(
           runAdapter(home, {
@@ -366,6 +406,8 @@ function main() {
             JFROG_TEST_HARNESS: "1",
             JFROG_TEST_IDENTITY_PROBE: "skip",
             JFROG_AGENT_HOOKS_LOG_FILE: path.join(home, "hook.log"),
+            // Trust the fake Artifactory's self-signed cert for this run only.
+            NODE_EXTRA_CA_CERTS: certPath,
           }),
         );
         if (context.includes("NOT READY")) {
@@ -400,6 +442,7 @@ function main() {
         writeAgentsConf(home, {
           packageResolution: {
             enabled: true,
+            defaultGlobalRepos: { npm: "npm-virtual" },
             autoSetup: ["npm"],
           },
         });

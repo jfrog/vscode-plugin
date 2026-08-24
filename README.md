@@ -16,7 +16,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 
 | Component | Feature                            | Description                                                                                                                                                                                                                                                        |
 | --------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **MCP**   | JFrog MCP server                   | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `${JFROG_URL}/mcp` (OAuth, no API keys).                                                                                                                                                 |
+| **MCP**   | JFrog MCP server                   | Remote JFrog MCP server auto-attached to every session via `.mcp.json` at `https://${env:JFROG_PLATFORM_URL}/mcp` (OAuth, no API keys).                                                                                                                                                 |
 | **Hook**  | MCP server alignment               | Secures installed plugins' `mcp.json` and `.mcp.json` server commands with JFrog Agent Guard at Copilot SessionStart.                                                                                                                                            |
 | **Skill** | Agent Guard                        | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 | **Hook**  | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session.                                                                                                                                                                                      |
@@ -84,10 +84,11 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 
 ### 1. Set persistent environment variables
 
-| Variable             | Description                                                                  |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`) |
-| `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                      |
+| Variable             | Description                                                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`).                                                                       |
+| `JFROG_PLATFORM_URL` | Your JFrog platform host, **without** the scheme, e.g. `mycompany.jfrog.io`. Resolves the JFrog MCP server URL (`https://${env:JFROG_PLATFORM_URL}/mcp`). |
+| `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                                                                                             |
 
 ### 2. Configure the JFrog CLI
 
@@ -108,10 +109,12 @@ After authentication, open a workspace in VS Code. The JFrog skills load on dema
 
 ### Agent Package Resolution
 
-When Agent Package Resolution is enabled in `~/.jfrog/agents-conf.json`, a
-SessionStart hook adds the resolved Artifactory repositories and package-routing
-rules to every new Copilot chat. Configure the JFrog CLI with `jf config add`,
-then start a new chat after changing the configuration.
+The shipped template enables Agent Package Resolution with empty repository
+bindings (nothing is routed until Consent Enable or an admin adds
+`defaultGlobalRepos`). When it is on, a SessionStart hook injects the resolved
+Artifactory repositories and package-routing policy into every new Copilot chat.
+Configure the JFrog CLI with `jf config add`, then start a new chat after
+changing the configuration.
 
 The feature is fail-open for the chat session: disabled or unexpected failure
 returns an empty hook result instead of preventing Copilot from starting. An
@@ -184,16 +187,16 @@ See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/
 
 ### The `jfrog` MCP server shows "Stopped"
 
-VS Code starts MCP servers on demand, so the `jfrog` server often shows **Stopped** until something needs it. This is expected — but if the tools aren't showing up, start it manually first: open the **MCP: List Servers** command (or the MCP view), select **jfrog**, and choose **Start Server**. Once it's running you'll see the `enable_jfrog_tools` tool (or the real JFrog tools once authenticated).
+VS Code starts MCP servers on demand, so the `jfrog` server often shows **Stopped** until something needs it. This is expected — but if the tools aren't showing up, start it manually first: open the **MCP: List Servers** command (or the MCP view), select **jfrog**, and choose **Start Server**. On first start VS Code opens the browser for a one-time OAuth authorization, after which the JFrog tools appear.
 
 ### JFrog MCP tools don't appear after signing in
 
-The JFrog MCP is proxied by Agent Guard. Until you're authenticated it exposes a single `enable_jfrog_tools` tool; calling it opens the browser for a one-time authorization and then the real JFrog tools are added to the session. In VS Code / Copilot Chat two extra steps are sometimes needed before the agent can use them:
+The JFrog MCP is a remote HTTP server the plugin attaches at `https://${env:JFROG_PLATFORM_URL}/mcp`; VS Code authorizes it over OAuth on first connect (no API keys). In VS Code / Copilot Chat two extra steps are sometimes needed before the agent can use the tools:
 
-- **Enable the tools in the tool picker.** Open the 🛠 **Configure Tools** panel and enable the `jfrog-mcp` server's tools — newly added tools are not selected automatically.
+- **Enable the tools in the tool picker.** Open the 🛠 **Configure Tools** panel and enable the `jfrog` server's tools — newly added tools are not selected automatically.
 - **Open a new chat.** A chat's tool set is fixed when it starts, so the tools that appeared after login only take effect in a new chat.
 
-If the agent keeps falling back to the `jf` CLI even though the JFrog tools are present, it usually means the tools aren't selected in the picker — enable them and start a new chat. An empty or login-only tool list means "call `enable_jfrog_tools`", not that the MCP is broken.
+If the agent keeps falling back to the `jf` CLI even though the JFrog tools are present, it usually means the tools aren't selected in the picker — enable them and start a new chat. Make sure `JFROG_PLATFORM_URL` is set in the IDE launch environment so `https://${env:JFROG_PLATFORM_URL}/mcp` resolves correctly.
 
 ---
 
