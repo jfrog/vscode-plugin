@@ -38,8 +38,26 @@ export const IdentityCause = Object.freeze({
   JF_AUTH_FAILED: "jf-auth-failed",
   /** Probe timed out / network / non-auth HTTP failure. */
   JF_UNREACHABLE: "jf-unreachable",
+  /** Platform URL is not https — refuse to send credentials in cleartext. */
+  INSECURE_URL: "insecure-url",
 });
 
+/**
+ * Credentials must never travel in cleartext. `jf` accepts http:// servers;
+ * callers that send Authorization headers must gate on https first.
+ * @param {{ url?: string } | string | null | undefined} identityOrUrl
+ */
+export function isHttpsIdentityUrl(identityOrUrl) {
+  try {
+    const raw =
+      typeof identityOrUrl === "string"
+        ? identityOrUrl
+        : (identityOrUrl?.url ?? "");
+    return new URL(String(raw)).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 const PROBE_TIMEOUT_MS = 3_000;
 
 // Module-scope cache. Keyed by the requested serverId hint (`undefined`
@@ -251,6 +269,15 @@ export async function probePlatformIdentity(identity) {
   if (testHarnessActive() && process.env.JFROG_TEST_IDENTITY_PROBE === "skip") {
     return { ok: true, cause: IdentityCause.OK };
   }
+
+  if (!isHttpsIdentityUrl(identity)) {
+    log.warn("refusing identity probe over a non-HTTPS platform URL");
+    const result = { ok: false, cause: IdentityCause.INSECURE_URL };
+    const keyEarly = probeCacheKey(identity);
+    PROBE_CACHE.set(keyEarly, result);
+    return result;
+  }
+
   if (process.env.JF_AGENT_IDENTITY_PROBE === "0") {
     return { ok: true, cause: IdentityCause.OK };
   }
@@ -346,7 +373,8 @@ export async function getReadyPlatformIdentity() {
   // closed to pending so we don't inject "routing" with an unusable identity.
   if (
     probe.cause === IdentityCause.JF_AUTH_FAILED ||
-    probe.cause === IdentityCause.JF_UNSUPPORTED_AUTH
+    probe.cause === IdentityCause.JF_UNSUPPORTED_AUTH ||
+    probe.cause === IdentityCause.INSECURE_URL
   ) {
     log.debug("identity not ready after probe", { cause: probe.cause });
     return { identity: null, cause: probe.cause };
@@ -418,6 +446,12 @@ function noIdentityHint(cause) {
     return (
       "Artifactory did not respond to a readiness probe. Check network / " +
       "platform URL, then retry."
+    );
+  }
+  if (cause === IdentityCause.INSECURE_URL) {
+    return (
+      "Configured platform URL is not HTTPS. Reconfigure with `jf config add` " +
+      "using an https:// URL so credentials are not sent in cleartext."
     );
   }
   return (

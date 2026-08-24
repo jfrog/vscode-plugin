@@ -5,12 +5,13 @@
 //
 //   1. JF_AGENT_PACKAGE_RESOLUTION_DISABLE=1 → mode="off" (env kill switch)
 //   2. packageResolution.enabled !== true in      → mode="off" (file-primary gate;
-//      ~/.jfrog/agents-conf.json                   default off in shipped template)
+//      ~/.jfrog/agents-conf.json                   shipped template defaults on)
 //   3. jf config + readiness probe (via jf-identity)
 //      → mode="routing" when identity is usable and Artifactory accepts it;
 //      otherwise mode="pending" with a `cause`:
 //        jf-not-installed | jf-not-configured | jf-unsupported-auth |
-//        jf-auth-failed | jf-unreachable
+//        jf-auth-failed | insecure-url
+//      (jf-unreachable stays routing best-effort — not a pending cause)
 //
 // Modes:
 //   "off"     — do nothing (no injection).
