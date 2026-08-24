@@ -137,9 +137,16 @@ chat.
 
 Discovery checks both `mcp.json` and `.mcp.json`, in that order, under
 `~/.copilot/installed-plugins/{marketplace}/{plugin}`,
-`~/.copilot/installed-plugins/_direct/{id}`, and
-`~/.vscode/agent-plugins/…`, plus this plugin's own configs next to the
-adaptor.
+`~/.copilot/installed-plugins/_direct/{id}`,
+`~/.vscode/agent-plugins/…`, and the VS Code runtime plugin tree
+(`~/Library/Application Support/Code/agentPlugins` on macOS,
+`%APPDATA%\Code\agentPlugins` on Windows, `$XDG_CONFIG_HOME/Code/agentPlugins`
+on Linux), plus this plugin's own configs next to the adaptor.
+
+VS Code loads plugin MCP servers from its own per-install copy under
+`Code/agentPlugins`, so both that copy and the install tree it came from are
+rewritten. Otherwise the running servers stay unsecured until VS Code re-copies
+the plugin.
 
 Only plugin MCP configurations are considered. The hook never rewrites the user
 `Code/User/mcp.json` or a workspace `.vscode/mcp.json`.
@@ -149,8 +156,9 @@ Environment controls:
 - `JF_AGENT_REWRITE_MCP_JSON_DISABLE=1` disables rewriting.
 - `JF_AGENT_REWRITE_MCP_JSON_FORCE=1` ignores the current-state marker and
   forces a refresh.
-- `JF_ALIGN_MCP_JSON_ROOTS` replaces the default Copilot installed-plugins
-  and `~/.vscode/agent-plugins` roots (and skips this plugin's own configs).
+- `JF_ALIGN_MCP_JSON_ROOTS` replaces the default Copilot installed-plugins,
+  `~/.vscode/agent-plugins`, and `Code/agentPlugins` roots (and skips this
+  plugin's own configs).
   Separate roots with colon or comma on macOS/Linux, and semicolon or
   comma on Windows. Overrides may point outside the default, but discovery
   still rejects `.vscode` and `Code/User` configs and symlinks escaping an

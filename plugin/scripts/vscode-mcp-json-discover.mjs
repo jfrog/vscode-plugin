@@ -20,21 +20,25 @@ export function parseDiscoveryRoots(value, platform = process.platform) {
     .filter(Boolean);
 }
 
-function platformVsCodeUserDir(home, env, platform) {
+function platformVsCodeDir(home, env, platform) {
   if (platform === "darwin") {
-    return path.join(
-      home,
-      "Library",
-      "Application Support",
-      "Code",
-      "User",
-    );
+    return path.join(home, "Library", "Application Support", "Code");
   }
   if (platform === "win32") {
-    return env.APPDATA ? path.join(env.APPDATA, "Code", "User") : null;
+    return env.APPDATA ? path.join(env.APPDATA, "Code") : null;
   }
   const configHome = env.XDG_CONFIG_HOME || path.join(home, ".config");
-  return path.join(configHome, "Code", "User");
+  return path.join(configHome, "Code");
+}
+
+function platformVsCodeUserDir(home, env, platform) {
+  const codeDir = platformVsCodeDir(home, env, platform);
+  return codeDir ? path.join(codeDir, "User") : null;
+}
+
+function platformVsCodeAgentPluginsDir(home, env, platform) {
+  const codeDir = platformVsCodeDir(home, env, platform);
+  return codeDir ? path.join(codeDir, "agentPlugins") : null;
 }
 
 function isContained(root, candidate) {
@@ -218,6 +222,13 @@ export function discoverVscodeMcpJson(options = {}) {
     seen,
     userDir,
   );
+  // VS Code loads plugin MCP servers from its own per-install copy under
+  // Code/agentPlugins, not from the install tree, so rewriting only the source
+  // leaves the running servers unsecured until VS Code re-copies.
+  const agentPluginsDir = platformVsCodeAgentPluginsDir(home, env, platform);
+  if (agentPluginsDir) {
+    collectRoot(agentPluginsDir, 4, output, seen, userDir);
+  }
   if (includeSelf) {
     addSelfConfigs(output, seen, userDir, moduleUrl);
   }

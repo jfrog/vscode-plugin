@@ -29,7 +29,7 @@ function pluginModuleUrl(pluginRoot) {
     .href;
 }
 
-test("discovers Copilot installed-plugin and VS Code agent-plugin configs", () => {
+test("discovers Copilot installed-plugin, agent-plugin, and runtime configs", () => {
   const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-discover-"));
   const expected = [
     file(
@@ -41,11 +41,11 @@ test("discovers Copilot installed-plugin and VS Code agent-plugin configs", () =
       ".copilot/installed-plugins/_direct/direct-id/.mcp.json",
     ),
     file(home, ".vscode/agent-plugins/github.com/org/repo/plugin/mcp.json"),
+    file(
+      home,
+      "Library/Application Support/Code/agentPlugins/github.com/org/repo/plugin/.mcp.json",
+    ),
   ];
-  file(
-    home,
-    "Library/Application Support/Code/agentPlugins/github.com/org/repo/plugin/.mcp.json",
-  );
   file(home, "cache/copilot/marketplaces/marketplace/plugin/mcp.json");
   file(home, "self/mcp.json");
   file(home, "self/.mcp.json");
@@ -216,12 +216,13 @@ test("stops descending below the first plugin config", () => {
   );
 });
 
-test("defaults ignore platform Code/agentPlugins trees", () => {
+test("defaults include platform Code/agentPlugins runtime copies", () => {
   const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-code-user-plugin-"));
-  file(
+  const wanted = file(
     home,
     "Library/Application Support/Code/agentPlugins/github.com/code/user/plugin/mcp.json",
   );
+  file(home, "Library/Application Support/Code/User/mcp.json");
 
   assert.deepEqual(
     discoverVscodeMcpJson({
@@ -230,7 +231,24 @@ test("defaults ignore platform Code/agentPlugins trees", () => {
       platform: "darwin",
       includeSelf: false,
     }),
-    [],
+    [wanted],
+  );
+});
+
+test("Linux runtime copies follow XDG_CONFIG_HOME", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-xdg-plugin-"));
+  const xdg = path.join(home, "xdg-config");
+  const wanted = file(xdg, "Code/agentPlugins/org/plugin/mcp.json");
+  file(xdg, "Code/User/mcp.json");
+
+  assert.deepEqual(
+    discoverVscodeMcpJson({
+      env: { HOME: home, XDG_CONFIG_HOME: xdg },
+      home,
+      platform: "linux",
+      includeSelf: false,
+    }),
+    [wanted],
   );
 });
 
@@ -474,15 +492,15 @@ test("Windows Code/User under APPDATA is excluded from override discovery", () =
   );
 });
 
-test("Windows defaults use installed-plugins and .vscode/agent-plugins", () => {
+test("Windows defaults use installed-plugins, agent-plugins, and APPDATA runtime", () => {
   const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-windows-"));
   const appData = path.join(home, "AppData", "Roaming");
   const localAppData = path.join(home, "AppData", "Local");
   const expected = [
     file(home, ".copilot/installed-plugins/org/plugin/mcp.json"),
     file(home, ".vscode/agent-plugins/github.com/org/repo/plugin/mcp.json"),
+    file(appData, "Code/agentPlugins/org/plugin/mcp.json"),
   ];
-  file(appData, "Code/agentPlugins/org/plugin/mcp.json");
   file(localAppData, "copilot/marketplaces/org/plugin/.mcp.json");
 
   assert.deepEqual(
