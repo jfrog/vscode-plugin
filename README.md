@@ -86,7 +86,6 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 
 | Variable             | Description                                                                                                                                          |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`).                                                                       |
 | `JFROG_PLATFORM_URL` | Your JFrog platform host, **without** the scheme, e.g. `mycompany.jfrog.io`. Resolves the JFrog MCP server URL (`https://${env:JFROG_PLATFORM_URL}/mcp`). |
 | `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                                                                                             |
 
@@ -101,7 +100,7 @@ If you have never configured the JFrog CLI on this machine:
    ```
 3. Follow the interactive prompts to enter the same JFrog platform URL and access token.
 
-Run **`/jfrog-init`** in Copilot Chat after install. **Reload the VS Code window** after MCP config changes (a new chat alone is not enough). Setting `JFROG_URL` / `JFROG_PLATFORM_URL` / `JFROG_ACCESS_TOKEN` does not repair a failed init walk — fix the reported step and re-run `/jfrog-init`.
+Run **`/jfrog-init`** in Copilot Chat after install. **Reload the VS Code window** after MCP config changes (a new chat alone is not enough). Setting `JFROG_PLATFORM_URL` / `JFROG_ACCESS_TOKEN` does not repair a failed init walk — fix the reported step and re-run `/jfrog-init`.
 
 ---
 
