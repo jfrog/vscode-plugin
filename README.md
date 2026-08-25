@@ -2,6 +2,8 @@
 
 The official JFrog plugin for [Visual Studio Code](https://code.visualstudio.com/) and **GitHub Copilot Chat**. The plugin connects your Copilot agent to the JFrog Platform with policy-governed MCP access, auto-installed governance instructions, and Agent Guard.
 
+> **Install flow:** [Shared install, verify, and recovery guide](https://github.com/jfrog/claude-plugin/blob/main/docs/shared-install-and-verify.md) — canonical cross-harness rules. This README covers **VS Code-only** steps.
+
 Paste this into your browser:
 
 ```
@@ -100,6 +102,22 @@ If you have never configured the JFrog CLI on this machine:
    jf config add
    ```
 3. Follow the interactive prompts to enter the same JFrog platform URL and access token.
+
+Run **`/jfrog-init`** in Copilot Chat after install. **Reload the VS Code window** after MCP config changes (a new chat alone is not enough). See [shared env-var rules](https://github.com/jfrog/claude-plugin/blob/main/docs/shared-install-and-verify.md#environment-variables--what-actually-helps) — env vars do not repair a failed init walk.
+
+---
+
+## Verify
+
+Verification is a required install step, not a troubleshooting fallback:
+
+1. The plugin appears in Copilot's installed plugins list.
+2. **`/jfrog-init`** completes without blocking errors.
+3. **Reload the VS Code window**, open a **new** Copilot chat, and enable the JFrog MCP tools in the tool picker.
+4. `jf rt ping` — succeeds against your configured server.
+
+If a check fails, fix the step `/jfrog-init` reports, re-run it, and reload the window —
+see the [shared recovery playbook](https://github.com/jfrog/claude-plugin/blob/main/docs/shared-install-and-verify.md#recovery-playbook).
 
 ---
 
