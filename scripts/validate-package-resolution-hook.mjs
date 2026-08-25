@@ -24,11 +24,18 @@ const repoRoot = path.resolve(
 );
 const pluginRoot = path.join(repoRoot, "plugin");
 const adapter = path.join(pluginRoot, "modules", "copilot-session-start.mjs");
+const alignAdapter = path.join(
+  pluginRoot,
+  "scripts",
+  "vscode-align-mcp-json.mjs",
+);
 const hooksFile = path.join(pluginRoot, "hooks", "hooks.json");
 const manifestFile = path.join(pluginRoot, ".claude-plugin", "plugin.json");
 const marketplaceFile = path.join(repoRoot, "marketplace.json");
 const expectedCommand =
   'node "${CLAUDE_PLUGIN_ROOT}/modules/copilot-session-start.mjs" package-resolution';
+const expectedAlignCommand =
+  'node "${CLAUDE_PLUGIN_ROOT}/scripts/vscode-align-mcp-json.mjs" session-start';
 
 // Anything a developer or CI step may already have exported that would steer
 // the hook away from the behaviour under test — a kill switch or a redirected
@@ -282,6 +289,13 @@ function main() {
     execFileSync(process.execPath, ["--check", adapter], { stdio: "pipe" });
   });
 
+  check("MCP alignment adapter exists and parses", () => {
+    if (!existsSync(alignAdapter)) throw new Error(`missing: ${alignAdapter}`);
+    execFileSync(process.execPath, ["--check", alignAdapter], {
+      stdio: "pipe",
+    });
+  });
+
   let manifest;
   let marketplacePlugin;
   check("plugin and marketplace versions match", () => {
@@ -310,13 +324,17 @@ function main() {
     }
   });
 
-  check("SessionStart runs only package resolution", () => {
+  check("SessionStart runs package resolution and MCP alignment", () => {
     const config = JSON.parse(readFileSync(hooksFile, "utf8"));
     const hooks = (config?.hooks?.SessionStart ?? []).flatMap(
       (entry) => entry.hooks ?? [],
     );
     const commands = hooks.map((hook) => hook.command);
-    if (commands.length !== 1 || commands[0] !== expectedCommand) {
+    if (
+      commands.length !== 2 ||
+      commands[0] !== expectedCommand ||
+      commands[1] !== expectedAlignCommand
+    ) {
       throw new Error(
         `unexpected SessionStart commands: ${JSON.stringify(commands)}`,
       );
@@ -324,6 +342,15 @@ function main() {
     if (hooks[0]?.timeout !== 15) {
       throw new Error(
         `expected a 15-second hook timeout, got ${hooks[0]?.timeout}`,
+      );
+    }
+    if (
+      hooks[1]?.timeout !== 60 ||
+      hooks[1]?.statusMessage !==
+        "Securing plugin MCP servers with JFrog Agent Guard…"
+    ) {
+      throw new Error(
+        `unexpected MCP alignment hook: ${JSON.stringify(hooks[1])}`,
       );
     }
   });

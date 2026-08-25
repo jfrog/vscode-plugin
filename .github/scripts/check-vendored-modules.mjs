@@ -59,12 +59,12 @@ if (process.argv.includes("--write")) {
 }
 
 const expected = JSON.parse(await readFile(manifestFile, "utf8"));
-if (expected.pin !== vendor.pin)
+if (JSON.stringify(expected.pin) !== JSON.stringify(vendor.pin))
   throw new Error(
-    `integrity pin mismatch: manifest=${expected.pin} vendor=${vendor.pin}`,
+    `integrity pin mismatch: manifest=${JSON.stringify(expected.pin)} vendor=${JSON.stringify(vendor.pin)}`,
   );
 if (JSON.stringify(expected.files) !== JSON.stringify(actual.files))
   throw new Error(
     "vendored modules differ from sync-modules-integrity.json; re-vendor and update the manifest",
   );
-console.log(`vendored modules match pin ${vendor.pin}`);
+console.log(`vendored modules match pin ${JSON.stringify(vendor.pin)}`);

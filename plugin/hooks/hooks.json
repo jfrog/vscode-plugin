@@ -8,6 +8,12 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/modules/copilot-session-start.mjs\" package-resolution",
             "timeout": 15,
             "statusMessage": "Routing package installs through JFrog Artifactory…"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vscode-align-mcp-json.mjs\" session-start",
+            "timeout": 60,
+            "statusMessage": "Securing plugin MCP servers with JFrog Agent Guard…"
           }
         ]
       }
