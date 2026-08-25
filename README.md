@@ -132,8 +132,11 @@ At Copilot `SessionStart`, the plugin discovers MCP configuration files owned by
 installed agent plugins and passes them to Agent Guard's shared
 `--rewrite-mcp-json` pipeline. Agent Guard rewrites eligible server commands so
 they run through the configured JFrog project policy. The hook is fail-open and
-has a 60-second limit; disabled, unchanged, or failed rewrites do not block a
-chat.
+has a 60-second limit; the rewrite pipeline itself is budgeted at 35 seconds.
+A cold `npx` fetch of Agent Guard can consume the remaining time, in which case
+the hook still returns success and does not rewrite files in that session. A
+later session with a warm cache retries. Disabled, unchanged, or failed
+rewrites do not block a chat.
 
 Discovery checks both `mcp.json` and `.mcp.json`, in that order, under
 `~/.copilot/installed-plugins/{marketplace}/{plugin}`,
@@ -148,21 +151,26 @@ VS Code loads plugin MCP servers from its own per-install copy under
 rewritten. Otherwise the running servers stay unsecured until VS Code re-copies
 the plugin.
 
-Only plugin MCP configurations are considered. The hook never rewrites the user
-`Code/User/mcp.json` or a workspace `.vscode/mcp.json`.
+Default discovery only walks stable VS Code (`Code/agentPlugins`). Only plugin
+MCP configurations are considered. The hook never rewrites user
+`mcp.json` under `Code/User`, `Code - Insiders/User`, or `VSCodium/User`, or a
+workspace `.vscode/mcp.json` (including when the override root is the resolved
+path of a `.vscode` symlink).
 
 Environment controls:
 
 - `JF_AGENT_REWRITE_MCP_JSON_DISABLE=1` disables rewriting.
 - `JF_AGENT_REWRITE_MCP_JSON_FORCE=1` ignores the current-state marker and
   forces a refresh.
+- This hook always uses the pinned `@jfrog/agent-guard` version shipped with
+  the plugin; `JFROG_AGENT_GUARD_VERSION=latest` is not honored here.
 - `JF_ALIGN_MCP_JSON_ROOTS` replaces the default Copilot installed-plugins,
   `~/.vscode/agent-plugins`, and `Code/agentPlugins` roots (and skips this
   plugin's own configs).
   Separate roots with colon or comma on macOS/Linux, and semicolon or
   comma on Windows. Overrides may point outside the default, but discovery
-  still rejects `.vscode` and `Code/User` configs and symlinks escaping an
-  override root.
+  still rejects workspace `.vscode` and `Code` / `Code - Insiders` /
+  `VSCodium` `User` configs and symlinks escaping an override root.
 
 If the alignment pipeline changes any discovered configuration bytes, even if
 the pipeline later times out or reports a failure, Copilot displays:

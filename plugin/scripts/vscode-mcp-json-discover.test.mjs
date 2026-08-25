@@ -471,6 +471,98 @@ test("allow roots are canonical directories and deduplicated", () => {
   );
 });
 
+test("allow roots use the real parent of a config symlink", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-allow-file-link-"));
+  const realDir = path.join(home, "real-dir");
+  const logicalDir = path.join(home, "plugin");
+  const realFile = file(realDir, "config.json");
+  mkdirSync(logicalDir, { recursive: true });
+  const logicalFile = path.join(logicalDir, "mcp.json");
+  symlinkSync(realFile, logicalFile);
+
+  assert.deepEqual(allowRootsForMcpJson([logicalFile]), [
+    realpathSync(realDir),
+  ]);
+});
+
+test("includeSelf rejects config symlinks that escape the plugin root", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-self-escape-"));
+  const pluginRoot = path.join(home, "installed-jfrog");
+  mkdirSync(pluginRoot, { recursive: true });
+  const outside = file(home, "outside/mcp.json");
+  symlinkSync(outside, path.join(pluginRoot, "mcp.json"));
+  symlinkSync(outside, path.join(pluginRoot, ".mcp.json"));
+
+  assert.deepEqual(
+    discoverVscodeMcpJson({
+      env: { HOME: home },
+      home,
+      platform: "linux",
+      moduleUrl: pluginModuleUrl(pluginRoot),
+    }),
+    [],
+  );
+});
+
+test("override of the realpath of a workspace .vscode symlink is rejected", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-vscode-real-"));
+  const workspace = path.join(home, "project");
+  const actual = path.join(home, "actual-vscode");
+  file(actual, "mcp.json");
+  const vscodeDir = path.join(workspace, ".vscode");
+  mkdirSync(workspace, { recursive: true });
+  symlinkSync(actual, vscodeDir);
+
+  assert.deepEqual(
+    discoverVscodeMcpJson({
+      env: { HOME: home, JF_ALIGN_MCP_JSON_ROOTS: actual },
+      home,
+      platform: "linux",
+      workspaceRoots: [workspace],
+    }),
+    [],
+  );
+});
+
+test("Linux Code - Insiders/User and VSCodium/User are excluded from override discovery", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-flavors-"));
+  const insidersUser = path.join(home, ".config", "Code - Insiders", "User");
+  const vscodiumUser = path.join(home, ".config", "VSCodium", "User");
+  file(insidersUser, "mcp.json");
+  file(vscodiumUser, "mcp.json");
+  const wanted = file(home, "override/plugin/mcp.json");
+
+  assert.deepEqual(
+    discoverVscodeMcpJson({
+      env: {
+        HOME: home,
+        JF_ALIGN_MCP_JSON_ROOTS: `${insidersUser}:${vscodiumUser}:${path.join(home, "override")}`,
+      },
+      home,
+      platform: "linux",
+    }),
+    [wanted],
+  );
+});
+
+test("override of the realpath of Code - Insiders/User is rejected", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-insiders-real-"));
+  const actual = path.join(home, "actual-insiders-user");
+  file(actual, "mcp.json");
+  const userDir = path.join(home, ".config", "Code - Insiders", "User");
+  mkdirSync(path.dirname(userDir), { recursive: true });
+  symlinkSync(actual, userDir);
+
+  assert.deepEqual(
+    discoverVscodeMcpJson({
+      env: { HOME: home, JF_ALIGN_MCP_JSON_ROOTS: actual },
+      home,
+      platform: "linux",
+    }),
+    [],
+  );
+});
+
 test("Windows Code/User under APPDATA is excluded from override discovery", () => {
   const home = mkdtempSync(path.join(tmpdir(), "vscode-mcp-win-user-"));
   const appData = path.join(home, "AppData", "Roaming");

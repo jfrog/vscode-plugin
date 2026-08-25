@@ -32,14 +32,8 @@ verifies the committed tree matches the pin (see
 [`sync-modules-integrity.json`](.github/scripts/sync-modules-integrity.json)
 for the per-file checksums used in that check).
 
-The current bundle uses `jfrog-agent-hooks/v0.9.0` as its base. Three shared
-core files are overlaid from commit
-`741c2ca9a4ea204a21bb13e72719a587f005856f`, merged by upstream PR 108:
-`agent-guard-check.mjs`, `entry.mjs`, and `rewrite-mcp-json.mjs`. The vendor
-configuration records both pins and lists those paths under `keep`; a full base
-sync temporarily stashes and restores them. All other files come from the
-v0.9.0 base. Only upstream `modules/` are vendored; upstream tests remain in
-the source repository.
+The current bundle uses `jfrog-agent-hooks/v0.11.1` as its base. Only upstream
+`modules/` are vendored; upstream tests remain in the source repository.
 
 ## Not vendored
 

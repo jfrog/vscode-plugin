@@ -10,6 +10,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const CONFIG_NAMES = ["mcp.json", ".mcp.json"];
+const VSCODE_APP_DIR_NAMES = ["Code", "Code - Insiders", "VSCodium"];
 
 export function parseDiscoveryRoots(value, platform = process.platform) {
   if (!value?.trim()) return [];
@@ -20,20 +21,26 @@ export function parseDiscoveryRoots(value, platform = process.platform) {
     .filter(Boolean);
 }
 
-function platformVsCodeDir(home, env, platform) {
+function platformVsCodeAppDir(home, env, platform, appDirName) {
   if (platform === "darwin") {
-    return path.join(home, "Library", "Application Support", "Code");
+    return path.join(home, "Library", "Application Support", appDirName);
   }
   if (platform === "win32") {
-    return env.APPDATA ? path.join(env.APPDATA, "Code") : null;
+    return env.APPDATA ? path.join(env.APPDATA, appDirName) : null;
   }
   const configHome = env.XDG_CONFIG_HOME || path.join(home, ".config");
-  return path.join(configHome, "Code");
+  return path.join(configHome, appDirName);
 }
 
-function platformVsCodeUserDir(home, env, platform) {
-  const codeDir = platformVsCodeDir(home, env, platform);
-  return codeDir ? path.join(codeDir, "User") : null;
+function platformVsCodeDir(home, env, platform) {
+  return platformVsCodeAppDir(home, env, platform, "Code");
+}
+
+function platformVsCodeUserDirs(home, env, platform) {
+  return VSCODE_APP_DIR_NAMES.map((appDirName) => {
+    const appDir = platformVsCodeAppDir(home, env, platform, appDirName);
+    return appDir ? path.join(appDir, "User") : null;
+  }).filter(Boolean);
 }
 
 function platformVsCodeAgentPluginsDir(home, env, platform) {
@@ -58,37 +65,60 @@ function safeRealpath(candidate) {
 }
 
 function isWorkspaceVscodeDirectory(directory) {
-  return path.basename(directory).toLowerCase() === ".vscode";
+  return Boolean(directory) && path.basename(directory).toLowerCase() === ".vscode";
 }
 
-function isInsideVsCodeUserDir(candidate, userDir) {
-  if (!userDir) return false;
-  const logicalUser = path.resolve(userDir);
+function isInsideRoot(candidate, root) {
+  if (!root) return false;
+  const logicalRoot = path.resolve(root);
   const logicalCandidate = path.resolve(candidate);
-  if (isContained(logicalUser, logicalCandidate)) return true;
-  const realUser = safeRealpath(logicalUser);
+  if (isContained(logicalRoot, logicalCandidate)) return true;
+  const realRoot = safeRealpath(logicalRoot);
   const realCandidate = safeRealpath(candidate);
   return Boolean(
-    realUser && realCandidate && isContained(realUser, realCandidate),
+    realRoot && realCandidate && isContained(realRoot, realCandidate),
   );
 }
 
-function isVsCodeUserTree(directory, realDirectory, userDir) {
+function isInsideAnyRoot(candidate, roots) {
+  return roots.some((root) => isInsideRoot(candidate, root));
+}
+
+function isVsCodeUserTree(directory, realDirectory, userDirs) {
   return (
-    isInsideVsCodeUserDir(directory, userDir) ||
-    (Boolean(realDirectory) && isInsideVsCodeUserDir(realDirectory, userDir))
+    isInsideAnyRoot(directory, userDirs) ||
+    (Boolean(realDirectory) && isInsideAnyRoot(realDirectory, userDirs))
   );
 }
 
-function collectRoot(root, maxDepth, output, seen, userDir) {
+function isResolvedWorkspaceVscode(directory, realDirectory, workspaceVscodeDirs) {
+  return (
+    isInsideAnyRoot(directory, workspaceVscodeDirs) ||
+    (Boolean(realDirectory) &&
+      isInsideAnyRoot(realDirectory, workspaceVscodeDirs))
+  );
+}
+
+function collectRoot(
+  root,
+  maxDepth,
+  output,
+  seen,
+  userDirs,
+  workspaceVscodeDirs,
+) {
   const realRoot = safeRealpath(root);
   if (!realRoot) return;
-  if (isVsCodeUserTree(root, realRoot, userDir)) return;
+  if (isVsCodeUserTree(root, realRoot, userDirs)) return;
+  if (isResolvedWorkspaceVscode(root, realRoot, workspaceVscodeDirs)) return;
 
   function visit(directory, depth) {
     const realDirectory = safeRealpath(directory);
     if (!realDirectory || !isContained(realRoot, realDirectory)) return;
-    if (isVsCodeUserTree(directory, realDirectory, userDir)) return;
+    if (isVsCodeUserTree(directory, realDirectory, userDirs)) return;
+    if (isResolvedWorkspaceVscode(directory, realDirectory, workspaceVscodeDirs)) {
+      return;
+    }
 
     const deniedWorkspace =
       isWorkspaceVscodeDirectory(directory) ||
@@ -106,14 +136,13 @@ function collectRoot(root, maxDepth, output, seen, userDir) {
           continue;
         }
         const realCandidate = safeRealpath(candidate);
-        const realParent = realCandidate
-          ? path.dirname(realCandidate)
-          : null;
+        const realParent = realCandidate ? path.dirname(realCandidate) : null;
         if (
           !realCandidate ||
           !isContained(realRoot, realCandidate) ||
           isWorkspaceVscodeDirectory(realParent) ||
-          isInsideVsCodeUserDir(realParent, userDir) ||
+          isInsideAnyRoot(realParent, workspaceVscodeDirs) ||
+          isInsideAnyRoot(realParent, userDirs) ||
           seen.has(realCandidate)
         ) {
           continue;
@@ -157,8 +186,16 @@ export function resolvePluginRoot(moduleUrl = import.meta.url) {
   return path.dirname(path.dirname(fileURLToPath(moduleUrl)));
 }
 
-function addSelfConfigs(output, seen, userDir, moduleUrl) {
+function addSelfConfigs(
+  output,
+  seen,
+  userDirs,
+  workspaceVscodeDirs,
+  moduleUrl,
+) {
   const pluginRoot = resolvePluginRoot(moduleUrl);
+  const realPluginRoot = safeRealpath(pluginRoot);
+  if (!realPluginRoot) return;
   for (const name of CONFIG_NAMES) {
     const candidate = path.join(pluginRoot, name);
     try {
@@ -171,8 +208,10 @@ function addSelfConfigs(output, seen, userDir, moduleUrl) {
     if (
       !realCandidate ||
       !realParent ||
+      !isContained(realPluginRoot, realCandidate) ||
       isWorkspaceVscodeDirectory(realParent) ||
-      isInsideVsCodeUserDir(realParent, userDir) ||
+      isInsideAnyRoot(realParent, workspaceVscodeDirs) ||
+      isInsideAnyRoot(realParent, userDirs) ||
       seen.has(realCandidate)
     ) {
       continue;
@@ -191,7 +230,10 @@ export function discoverVscodeMcpJson(options = {}) {
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
   const home = options.home ?? env.HOME ?? homedir();
-  const userDir = platformVsCodeUserDir(home, env, platform);
+  const userDirs = platformVsCodeUserDirs(home, env, platform);
+  const workspaceVscodeDirs = (options.workspaceRoots ?? []).map((root) =>
+    path.join(path.resolve(root), ".vscode"),
+  );
   const override = parseDiscoveryRoots(
     env.JF_ALIGN_MCP_JSON_ROOTS,
     platform,
@@ -203,7 +245,14 @@ export function discoverVscodeMcpJson(options = {}) {
 
   if (override.length) {
     for (const root of override) {
-      collectRoot(path.resolve(root), 4, output, seen, userDir);
+      collectRoot(
+        path.resolve(root),
+        4,
+        output,
+        seen,
+        userDirs,
+        workspaceVscodeDirs,
+      );
     }
     return output;
   }
@@ -213,24 +262,33 @@ export function discoverVscodeMcpJson(options = {}) {
     2,
     output,
     seen,
-    userDir,
+    userDirs,
+    workspaceVscodeDirs,
   );
   collectRoot(
     path.join(home, ".vscode", "agent-plugins"),
     4,
     output,
     seen,
-    userDir,
+    userDirs,
+    workspaceVscodeDirs,
   );
   // VS Code loads plugin MCP servers from its own per-install copy under
   // Code/agentPlugins, not from the install tree, so rewriting only the source
   // leaves the running servers unsecured until VS Code re-copies.
   const agentPluginsDir = platformVsCodeAgentPluginsDir(home, env, platform);
   if (agentPluginsDir) {
-    collectRoot(agentPluginsDir, 4, output, seen, userDir);
+    collectRoot(
+      agentPluginsDir,
+      4,
+      output,
+      seen,
+      userDirs,
+      workspaceVscodeDirs,
+    );
   }
   if (includeSelf) {
-    addSelfConfigs(output, seen, userDir, moduleUrl);
+    addSelfConfigs(output, seen, userDirs, workspaceVscodeDirs, moduleUrl);
   }
   return output;
 }
@@ -239,7 +297,10 @@ export function allowRootsForMcpJson(paths) {
   const roots = [];
   const seen = new Set();
   for (const configPath of paths) {
-    const root = safeRealpath(path.dirname(configPath));
+    const realFile = safeRealpath(configPath);
+    const root = realFile
+      ? path.dirname(realFile)
+      : safeRealpath(path.dirname(configPath));
     if (!root || seen.has(root)) continue;
     seen.add(root);
     roots.push(root);

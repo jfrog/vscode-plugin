@@ -11,6 +11,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { DEFAULT_AGENT_GUARD_VERSION } from "../modules/core/rewrite-mcp-json.mjs";
 import {
   RECOMMENDED_HOOK_TIMEOUT_SEC,
   runVscodeAlignMcpJson,
@@ -179,6 +180,23 @@ test("pipeline failure without changed bytes is a no-op", async () => {
     },
   });
 
+  assert.deepEqual(result, { exitCode: 0, stdout: "{}" });
+});
+
+test("SessionStart pins Agent Guard and does not forward latest", async () => {
+  let receivedEnv;
+  const result = await runVscodeAlignMcpJson({
+    mode: "session-start",
+    stdinRaw: COPILOT_INPUT,
+    env: { JFROG_AGENT_GUARD_VERSION: "latest" },
+    discover: () => [],
+    pipeline: async (options) => {
+      receivedEnv = options.env;
+      return { exitCode: 0, outcome: "skipped_no_paths", reason: "" };
+    },
+  });
+
+  assert.equal(receivedEnv.JFROG_AGENT_GUARD_VERSION, DEFAULT_AGENT_GUARD_VERSION);
   assert.deepEqual(result, { exitCode: 0, stdout: "{}" });
 });
 

@@ -5,8 +5,15 @@ import { readFileSync } from "node:fs";
 import process from "node:process";
 
 import { isMainEntry } from "../modules/core/entry.mjs";
-import { detectHarness, readStdin } from "../modules/core/io.mjs";
-import { runRewriteMcpJsonPipeline } from "../modules/core/rewrite-mcp-json.mjs";
+import {
+  detectHarness,
+  parseWorkspaceRoots,
+  readStdin,
+} from "../modules/core/io.mjs";
+import {
+  DEFAULT_AGENT_GUARD_VERSION,
+  runRewriteMcpJsonPipeline,
+} from "../modules/core/rewrite-mcp-json.mjs";
 import {
   allowRootsForMcpJson,
   discoverVscodeMcpJson,
@@ -38,9 +45,14 @@ export async function runVscodeAlignMcpJson(options = {}) {
     const harness = detectHarness(options.stdinRaw ?? "");
     if (harness && harness !== HARNESS_ID) return noOp();
 
-    const env = options.env ?? process.env;
+    const env = {
+      ...(options.env ?? process.env),
+      JFROG_AGENT_GUARD_VERSION: DEFAULT_AGENT_GUARD_VERSION,
+    };
+    const workspaceRoots = parseWorkspaceRoots(options.stdinRaw ?? "");
     const discover =
-      options.discover ?? (() => discoverVscodeMcpJson({ env }));
+      options.discover ??
+      (() => discoverVscodeMcpJson({ env, workspaceRoots }));
     const pipeline = options.pipeline ?? runRewriteMcpJsonPipeline;
     let discoveredPaths = [];
     let before = new Map();
