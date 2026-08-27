@@ -113,7 +113,9 @@ Verification is a required install step, not a troubleshooting fallback:
 3. **Reload the VS Code window**, open a **new** Copilot chat, and enable the JFrog MCP tools in the tool picker.
 4. `jf rt ping` — succeeds against your configured server.
 
-If a check fails, fix the step `/jfrog-init` reports, re-run it, and reload the window.
+If a check fails, see [Recovery](#recovery). Fix the step `/jfrog-init` reports, re-run it, and reload the window.
+
+## Recovery
 
 | Symptom | Do this | Do **not** do this |
 | --- | --- | --- |
