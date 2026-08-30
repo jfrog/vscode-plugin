@@ -86,7 +86,6 @@ VS Code opens, prompts you to install the plugin, and asks you to **Trust** the 
 
 | Variable             | Description                                                                                                                                          |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JFROG_URL`          | Your JFrog platform URL, e.g. `https://mycompany.jfrog.io` (no trailing `/`).                                                                       |
 | `JFROG_PLATFORM_URL` | Your JFrog platform host, **without** the scheme, e.g. `mycompany.jfrog.io`. Resolves the JFrog MCP server URL (`https://${env:JFROG_PLATFORM_URL}/mcp`). |
 | `JFROG_ACCESS_TOKEN` | Your JFrog access token                                                                                                                             |
 
@@ -100,6 +99,29 @@ If you have never configured the JFrog CLI on this machine:
    jf config add
    ```
 3. Follow the interactive prompts to enter the same JFrog platform URL and access token.
+
+Run **`/jfrog-init`** in Copilot Chat after install. **Reload the VS Code window** after MCP config changes (a new chat alone is not enough). Setting `JFROG_PLATFORM_URL` / `JFROG_ACCESS_TOKEN` does not repair a failed init walk — fix the reported step and re-run `/jfrog-init`.
+
+---
+
+## Verify
+
+Verification is a required install step, not a troubleshooting fallback:
+
+1. The plugin appears in Copilot's installed plugins list.
+2. **`/jfrog-init`** completes without blocking errors.
+3. **Reload the VS Code window**, open a **new** Copilot chat, and enable the JFrog MCP tools in the tool picker.
+4. `jf rt ping` — succeeds against your configured server.
+
+If a check fails, see [Recovery](#recovery). Fix the step `/jfrog-init` reports, re-run it, and reload the window.
+
+## Recovery
+
+| Symptom | Do this | Do **not** do this |
+| --- | --- | --- |
+| MCP missing after install | Run `/jfrog-init`, **reload the VS Code window**, open a **new** Copilot chat, enable JFrog MCP tools. | Assume a new chat without a window reload will pick up MCP changes. |
+| `/jfrog-init` stopped at CLI/auth | Follow the skill prompt (`jf config add`, web login, or token path), then **re-run `/jfrog-init`**. | Skip init and only export env vars. |
+| Env vars set after a failed init | Fix the reported step, re-run `/jfrog-init`, reload the window. | Expect `JFROG_PLATFORM_URL` alone to substitute the MCP host. |
 
 ---
 
