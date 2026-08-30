@@ -71,8 +71,18 @@ jobs:
           fi
           echo "Version ${VERSION} is newer than ${LATEST} — proceeding with release"
 
-      # NOTE: no plugin-layout validator exists in this repo to gate the release on. If one
-      # lands, run it as a step here. See CONTRIBUTING.md#releasing.
+      - name: Set up Node.js
+        if: steps.detect.outputs.triggered == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # validate-skill-governance.yml only runs on pull requests, so nothing checks the merge
+      # commit the release is actually cut from. Re-running its script here is what gates the
+      # release on it. See CONTRIBUTING.md#releasing.
+      - name: Validate skill governance before releasing
+        if: steps.detect.outputs.triggered == 'true'
+        run: node scripts/validate-skill-governance.mjs
 
       # Tracked files at HEAD only, so nothing left on the runner can end up in the zip.
       - name: Package release artifact

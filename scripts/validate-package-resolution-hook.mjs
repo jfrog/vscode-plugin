@@ -329,28 +329,29 @@ function main() {
     const hooks = (config?.hooks?.SessionStart ?? []).flatMap(
       (entry) => entry.hooks ?? [],
     );
+    // Located by CONTENT, never by index or list length: SessionStart is a shared list that
+    // other features append to, so an index pins this check to whatever happens to sit there
+    // and a length check fails the moment anything else registers.
     const commands = hooks.map((hook) => hook.command);
-    if (
-      commands.length !== 2 ||
-      commands[0] !== expectedCommand ||
-      commands[1] !== expectedAlignCommand
-    ) {
+    const resolution = hooks.find((hook) => hook.command === expectedCommand);
+    const align = hooks.find((hook) => hook.command === expectedAlignCommand);
+    if (!resolution || !align) {
       throw new Error(
         `unexpected SessionStart commands: ${JSON.stringify(commands)}`,
       );
     }
-    if (hooks[0]?.timeout !== 15) {
+    if (resolution.timeout !== 15) {
       throw new Error(
-        `expected a 15-second hook timeout, got ${hooks[0]?.timeout}`,
+        `expected a 15-second hook timeout, got ${resolution.timeout}`,
       );
     }
     if (
-      hooks[1]?.timeout !== 60 ||
-      hooks[1]?.statusMessage !==
+      align.timeout !== 60 ||
+      align.statusMessage !==
         "Securing plugin MCP servers with JFrog Agent Guard…"
     ) {
       throw new Error(
-        `unexpected MCP alignment hook: ${JSON.stringify(hooks[1])}`,
+        `unexpected MCP alignment hook: ${JSON.stringify(align)}`,
       );
     }
   });
