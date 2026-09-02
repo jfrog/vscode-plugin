@@ -87,8 +87,17 @@ process.stdin.on("end", () => {
 }
 
 // Run a hook command the way VS Code does: the string from hooks.json handed to a shell, with the
-// event JSON on stdin. `isolate` drops the stub from PATH, which is how "npx is not installed at
-// all" is reproduced.
+// event JSON on the child's real stdin. `isolate` drops the stub from PATH, which is how "npx is
+// not installed at all" is reproduced.
+//
+// The delivery model is client-specific and must be checked per client, not assumed. VS Code
+// writes the payload to the process's stdin pipe — `stdin.write(JSON.stringify(...))` with
+// `stdio: ["pipe", ...]` in agentHostMain.js — so `input:` below is faithful. Cursor does NOT:
+// it base64s the event into the command string and pipes it in from a pipeline the spawned shell
+// builds, leaving the child's own stdin as /dev/null. Testing Cursor this way is what let
+// MLAI-1310 ship — a top-level `;` in the command severed Cursor's pipeline and every skill was
+// silently allowed, while a stdin-based harness passed all 34 checks. If a third delivery shape
+// ever appears, model it here rather than reusing this one.
 function runHook(command, payload, { isolate = false, extraEnv = {} } = {}) {
   const result = spawnSync(SH, ["-c", command], {
     input: Buffer.from(payload),
@@ -206,10 +215,15 @@ for (const event of GOVERNED_EVENTS) {
     const h = hooksFor(event)[0];
     assert(/_JFAG_NOW=\$\(date \+%s 2>\/dev\/null\);/.test(h.command),
       `${event} must read the clock defensively, tolerating an absent date(1)`);
-    assert(h.command.includes('JF_AGENT_GUARD_ENFORCE_DEADLINE="${_JFAG_NOW:+$((_JFAG_NOW + 25))}"'),
-      `${event} must compute an absolute deadline at invocation time, and pass EMPTY when the ` +
-      `clock could not be read: agent-guard ignores an empty deadline and falls back to its own ` +
-      `budget, whereas a garbage epoch floors the budget at 500ms and blocks every skill`);
+    // Computed INSIDE a command substitution, so the `;` the clock read needs is scoped and the
+    // hook stays one simple command. See the top-level-operator check below for why.
+    assert(h.command.includes(
+      'JF_AGENT_GUARD_ENFORCE_DEADLINE="$(_JFAG_NOW=$(date +%s 2>/dev/null); ' +
+      'echo ${_JFAG_NOW:+$((_JFAG_NOW + 25))})"'),
+      `${event} must compute an absolute deadline at invocation time INSIDE a command ` +
+      `substitution, and pass EMPTY when the clock could not be read: agent-guard ignores an ` +
+      `empty deadline and falls back to its own budget, whereas a garbage epoch floors the ` +
+      `budget at 500ms and blocks every skill`);
     assert(!/JF_AGENT_GUARD_ENFORCE_DEADLINE:[-=]/.test(h.command),
       `${event} must not fall back to an inherited value: an absolute instant inherited from an ` +
       `earlier process pins every later invocation to the past`);
@@ -238,6 +252,40 @@ check("every hook command is valid POSIX sh", () => {
     for (const h of hooksFor(event)) {
       const r = spawnSync(SH, ["-n", "-c", h.command], { encoding: "utf8" });
       assert(r.status === 0, `${event} command is not valid sh: ${r.stderr.trim()}`);
+    }
+  }
+});
+
+// Strip every $(…) / $((…)) group, leaving only the command's TOP-LEVEL text. A ';' inside a
+// substitution is scoped and harmless; one outside it is not.
+const topLevelOf = (s) => {
+  let out = "", depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s.startsWith("$(", i)) { depth++; i++; continue; }
+    if (depth && s[i] === "(") { depth++; continue; }
+    if (depth && s[i] === ")") { depth--; continue; }
+    if (!depth) out += s[i];
+  }
+  return out;
+};
+
+// Asserted here even though VS Code delivers the payload on the child's real stdin, where a
+// top-level `;` is harmless. Two reasons it is still a requirement:
+//
+//   * These command strings are kept deliberately identical across the Cursor, Claude Code and
+//     VS Code plugins, and on Cursor a top-level `;` severs the pipeline Cursor wraps around the
+//     command, silently allowing every skill (MLAI-1310). A string copied from here to there must
+//     not carry the defect with it.
+//   * "Harmless on today's client" is not a property to depend on. A one-simple-command hook works
+//     under every delivery model; one that relies on inheriting the shell's stdin does not.
+check("no governed command has a top-level ';', '&&' or '||'", () => {
+  for (const event of GOVERNED_EVENTS) {
+    const top = topLevelOf(hooksFor(event)[0].command);
+    for (const op of [";", "&&", "||"]) {
+      assert(!top.includes(op),
+        `${event}: a top-level "${op}" makes the hook depend on inheriting the shell's stdin. ` +
+        `On Cursor that silently allows every skill (MLAI-1310). Keep it inside $( ).\n` +
+        `         top-level text: ${top.trim()}`);
     }
   }
 });
