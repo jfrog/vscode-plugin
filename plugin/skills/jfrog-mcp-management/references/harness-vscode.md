@@ -77,6 +77,30 @@ Rules for the `inputs` block:
 - `description`: use the catalog `description`; if empty, construct a brief one.
 - `Bearer` headers: use `"Bearer ${input:<id>}"` and ask only for the token.
 
+## VS Code's sandbox
+
+When VS Code's agent-mode terminal sandbox (`chat.agent.sandbox.enabled`) is
+on, it blocks filesystem access — read and write — outside the workspace
+folder. This surfaces as failures that look like "Agent Guard disabled" but
+are a sandbox artifact, not a real answer:
+
+- Step 0's check script lives outside the workspace and fails to load
+  (`MODULE_NOT_FOUND`).
+- `~/.jfrog/` (jf CLI config) is unreadable, so Step 0 can't resolve a server
+  and reports exit 1 (Unknown) even though `jf config show` works in a normal
+  terminal.
+- `npx` can't write the npm cache outside the workspace (`EROFS`).
+
+Unlike Codex, VS Code's sandboxed terminal still forwards the full shell
+environment, so `JFROG_URL` + `JFROG_ACCESS_TOKEN` (or legacy `JF_URL` +
+`JF_ACCESS_TOKEN`) exported before VS Code starts reach Step 0 and the agent
+guard unchanged — prefer that path (see
+[agent-guard-common.md](agent-guard-common.md)) over `--server` here, since it
+does not depend on reading `~/.jfrog/`. If `MODULE_NOT_FOUND` or `EROFS`
+still blocks a command, VS Code offers a sandbox-bypass confirmation ("Run
+once outside sandbox" / "Disable sandbox and run") — ask the user to approve
+it, or to disable `chat.agent.sandbox.enabled` in Settings, then re-run.
+
 ## Enable
 
 Writing the entry is not enough — the server must be started via the UI. If it
