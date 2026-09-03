@@ -79,27 +79,16 @@ Rules for the `inputs` block:
 
 ## VS Code's sandbox
 
-When VS Code's agent-mode terminal sandbox (`chat.agent.sandbox.enabled`) is
-on, it blocks filesystem access — read and write — outside the workspace
-folder. This surfaces as failures that look like "Agent Guard disabled" but
-are a sandbox artifact, not a real answer:
+`chat.agent.sandbox.enabled` blocks filesystem access outside the workspace,
+which can look like "Agent Guard disabled" but isn't: `MODULE_NOT_FOUND` on
+Step 0's script, unreadable `~/.jfrog/` (server resolves to Unknown), `EROFS`
+on the npm cache.
 
-- Step 0's check script lives outside the workspace and fails to load
-  (`MODULE_NOT_FOUND`).
-- `~/.jfrog/` (jf CLI config) is unreadable, so Step 0 can't resolve a server
-  and reports exit 1 (Unknown) even though `jf config show` works in a normal
-  terminal.
-- `npx` can't write the npm cache outside the workspace (`EROFS`).
-
-Unlike Codex, VS Code's sandboxed terminal still forwards the full shell
-environment, so `JFROG_URL` + `JFROG_ACCESS_TOKEN` (or legacy `JF_URL` +
-`JF_ACCESS_TOKEN`) exported before VS Code starts reach Step 0 and the agent
-guard unchanged — prefer that path (see
-[agent-guard-common.md](agent-guard-common.md)) over `--server` here, since it
-does not depend on reading `~/.jfrog/`. If `MODULE_NOT_FOUND` or `EROFS`
-still blocks a command, VS Code offers a sandbox-bypass confirmation ("Run
-once outside sandbox" / "Disable sandbox and run") — ask the user to approve
-it, or to disable `chat.agent.sandbox.enabled` in Settings, then re-run.
+Unlike Codex, env vars still pass through the sandbox — prefer `JFROG_URL` +
+`JFROG_ACCESS_TOKEN` (see [agent-guard-common.md](agent-guard-common.md)) over
+`--server`. If the failure persists, have the user approve VS Code's
+sandbox-bypass prompt ("Run once outside sandbox") or disable
+`chat.agent.sandbox.enabled`, then re-run.
 
 ## Enable
 
