@@ -86,9 +86,9 @@ on the npm cache.
 
 Unlike Codex, env vars still pass through the sandbox — prefer `JFROG_URL` +
 `JFROG_ACCESS_TOKEN` (see [agent-guard-common.md](agent-guard-common.md)) over
-`--server`. If the failure persists, have the user approve VS Code's
-sandbox-bypass prompt ("Run once outside sandbox") or disable
-`chat.agent.sandbox.enabled`, then re-run.
+`--server`. If the failure persists, have the user approve the tool
+confirmation prompt for the command or disable `chat.agent.sandbox.enabled`,
+then re-run.
 
 ## Enable
 
