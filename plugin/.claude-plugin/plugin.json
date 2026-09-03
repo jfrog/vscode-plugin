@@ -1,7 +1,7 @@
 {
   "name": "jfrog",
   "description": "JFrog Platform integration with MCP, security skills, and supply-chain best practices",
-  "version": "1.0.19",
+  "version": "1.0.24",
   "license": "Apache-2.0",
   "author": {
     "name": "JFrog",

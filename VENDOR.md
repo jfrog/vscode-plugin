@@ -32,6 +32,9 @@ verifies the committed tree matches the pin (see
 [`sync-modules-integrity.json`](.github/scripts/sync-modules-integrity.json)
 for the per-file checksums used in that check).
 
+The current bundle uses `jfrog-agent-hooks/v0.11.1` as its base. Only upstream
+`modules/` are vendored; upstream tests remain in the source repository.
+
 ## Not vendored
 
 [`@jfrog/agent-guard`](https://jfrog.com) is fetched at runtime via `npx` from

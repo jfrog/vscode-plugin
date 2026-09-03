@@ -53,6 +53,9 @@ function causeIntro(cause) {
   if (cause === IdentityCause.JF_AUTH_FAILED) {
     return "`jf` credentials were rejected by Artifactory (expired, revoked, or wrong)";
   }
+  if (cause === IdentityCause.INSECURE_URL) {
+    return "`jf` is configured with a non-HTTPS platform URL (credentials would be sent in cleartext)";
+  }
   if (cause === IdentityCause.JF_UNREACHABLE) {
     return "Artifactory did not respond to a readiness probe (network / URL / outage)";
   }
@@ -83,6 +86,13 @@ function causeRemediation(cause) {
       "key with `jf config add` / re-login, then retry."
     );
   }
+  if (cause === IdentityCause.INSECURE_URL) {
+    return (
+      "The JFrog CLI is installed and a server is configured, but the platform " +
+      "URL is not HTTPS. Reconfigure with `jf config add` using an https:// URL " +
+      "so credentials are not sent in cleartext."
+    );
+  }
   if (cause === IdentityCause.JF_UNREACHABLE) {
     return (
       "The JFrog CLI is installed and a server is configured, but Artifactory " +
@@ -111,6 +121,9 @@ function causeChecklist(cause) {
   const refreshCreds =
     "Refresh credentials (`jf config add` / re-login) and confirm with " +
     "`jf config show`.";
+  const reconfigureHttps =
+    "Reconfigure the server with an https:// platform URL (`jf config add`) " +
+    "and confirm with `jf config show`.";
   const checkReachable =
     "Confirm the platform URL is reachable and Artifactory is healthy, " +
     "then retry.";
@@ -128,6 +141,9 @@ function causeChecklist(cause) {
   }
   if (cause === IdentityCause.JF_AUTH_FAILED) {
     return `1. ${refreshCreds}\n2. ${setup}`;
+  }
+  if (cause === IdentityCause.INSECURE_URL) {
+    return `1. ${reconfigureHttps}\n2. ${setup}`;
   }
   if (cause === IdentityCause.JF_UNREACHABLE) {
     return `1. ${checkReachable}\n2. ${setup}`;
@@ -170,10 +186,8 @@ function rewriteBulletFor(type, resolved) {
   const r = resolved[type];
   if (!r) {
     return (
-      `- \`${type}\` — **unresolved** (no Artifactory repo for this package manager yet). ` +
-      `Per hard rule #5, do not invent a URL: invoke \`jfrog-setup-package-managers\` ` +
-      `for \`${type}\` BEFORE any direct command. Once the binding is recorded, ` +
-      `route subsequent \`${type}\` commands through the resolved URL yourself.`
+      `- \`${type}\` — **unresolved**. Per hard rule #5: invoke \`jfrog-setup-package-managers\` ` +
+      `for \`${type}\` BEFORE any direct command; then route via the resolved URL.`
     );
   }
   const url = r.baseUrl;
@@ -194,8 +208,11 @@ function rewriteBulletFor(type, resolved) {
       return `- \`go get <mod>\` → \`GOPROXY=${url},direct go get <mod>\``;
     case "docker":
       return (
-        `- \`docker pull [<public-registry-host>/]acme/app:1.2\` → \`docker pull ${url}/acme/app:1.2\` (drop a leading PUBLIC registry host — \`docker.io\`, \`ghcr.io\`, \`quay.io\`, \`gcr.io\`, …. Leave \`localhost\`/\`127.0.0.1\`, private/internal registries, and the JFrog host itself as-is; if unsure, resolve the host — a private/loopback IP means internal, leave it)\n` +
-        `- \`podman pull …\` → same prefix rules as docker against \`${url}\``
+        `- \`docker pull [<public-host>/]acme/app:1.2\` → \`docker pull ${url}/acme/app:1.2\` ` +
+        `(drop leading PUBLIC hosts: \`docker.io\`, \`ghcr.io\`, \`quay.io\`, \`gcr.io\`, …. ` +
+        `Leave \`localhost\`/\`127.0.0.1\`, private/internal registries, and the JFrog host as-is; ` +
+        `if unsure, resolve the host — a private/loopback IP means internal, leave it)\n` +
+        `- \`podman pull …\` → same prefix rules against \`${url}\``
       );
     case "maven":
       return `- \`mvn ...\` → config-driven; run \`jfrog-setup-package-managers\` if not yet bound.`;
@@ -221,20 +238,29 @@ function buildDockerSection(governed, resolved) {
   const resolvedDocker = resolved.docker;
   const body = resolvedDocker
     ? [
-        "- **Bare refs go to Docker Hub.** `docker pull alpine:latest` (no registry host) uses",
-        "  `docker.io` — `jf setup docker` does **not** change that. You must prefix:",
-        "  `docker pull <host>/<repoKey>/<img>` using the docker row above (`host/repoKey`, not",
-        "  `https://…`).",
-        "- **Explicit hosts too.** `docker pull ghcr.io/foo/bar` (or any registry host in the ref)",
-        "  — also route through JFrog: prefix with the docker row above; do not pull from the",
-        "  upstream host directly.",
+        "- **Bare refs go to Docker Hub.** `docker pull alpine:latest` (no host) uses",
+        "  `docker.io` — `jf setup docker` does **not** change that. Prefix with the docker",
+        "  row above: `docker pull <host>/<repoKey>/<img>` (`host/repoKey`, not `https://…`).",
+        "- **Explicit hosts too.** `docker pull ghcr.io/foo/bar` (or any registry host) — also",
+        "  route through JFrog via the docker row; do not pull the upstream host directly.",
       ].join("\n")
     : [
-        "- **Unresolved docker ⇒ no docker commands.** The docker row shows",
-        "  `<no … repo resolved>`; do not run `docker pull/run/create` until setup completes",
-        '  and you have a prefixed ref. Do not "try first, fix later."',
+        "- **Unresolved docker ⇒ no docker commands.** Do not run `docker pull/run/create`",
+        "  until setup completes and you have a prefixed ref. Do not try first, fix later.",
       ].join("\n");
   return "\n## Docker (before any `docker pull`)\n\n" + body + "\n";
+}
+
+// Agent Guard carve-out only when npm is governed (the exception is npm-scoped).
+function buildAgentGuardSection(governed) {
+  if (!governed.includes("npm")) return "";
+  return [
+    "**Agent Guard bootstrap — exception to Decision step 4 and hard rule #7.** A command that installs",
+    "`@jfrog/agent-guard` and no other package may keep the registry its Agent Guard policy specifies",
+    "(e.g. `npx --yes --registry <url> @jfrog/agent-guard`). Nothing else is covered. This exception",
+    "never authorizes a public registry, and it never widens to another package.",
+    "",
+  ].join("\n");
 }
 
 // Pending-mode scope line — the governed package managers are known from config
@@ -323,7 +349,7 @@ export async function renderInstruction(flag, ctx = {}) {
     };
   }
 
-  // routing: resolve only the GOVERNED types (admin defaultGlobalRepos keys)
+  // routing: resolve governed types (admin ∪ applied workspace overlay)
   // and build the table / bullets / docker section
   // dynamically so ungoverned types disappear entirely (not blocked).
   await prepareSessionResolve({ workspaceRoots: ctx.workspaceRoots });
@@ -348,6 +374,7 @@ export async function renderInstruction(flag, ctx = {}) {
       buildRewriteBullets(governed, resolved),
     )
     .replace(/\{\{DOCKER_SECTION\}\}/g, buildDockerSection(governed, resolved))
+    .replace(/\{\{AGENT_GUARD_SECTION\}\}/g, buildAgentGuardSection(governed))
     .replace(
       /\{\{AUTO_SETUP_STATUS\}\}/g,
       ctx.autoSetupStatus ? `\n${ctx.autoSetupStatus}\n` : "",
