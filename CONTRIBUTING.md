@@ -24,7 +24,7 @@ This applies to **every** merge to `main`, including docs-only and chore changes
 
 The workflow reads the version from `plugin.json`, confirms `marketplace.json` agrees, packages the tracked files at `HEAD` (minus `.github/`) into `release.zip`, and creates the `vX.Y.Z` tag as part of publishing the GitHub Release.
 
-Two things to know before changing it:
+Things to know before changing it:
 
 - There is no plugin-layout validator in this repo, so a release is gated only on the two manifests agreeing. If a validator is added, run it as a step inside the release job as well: a separate workflow triggered by the same push can be red while a release still goes out.
 - The tag is created by the release, not before it. `gh release create --target` does both in one API call, so a failed run can't leave a tag behind with no release attached to it.

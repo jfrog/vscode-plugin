@@ -51,8 +51,9 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --tags origin
-          # git's globs can't anchor digits, so the shape is enforced with grep instead.
-          LATEST=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          # grep exits 1 when no tag matches, which pipefail would turn into a step failure —
+          # an empty LATEST is the legitimate first-release case, handled just below.
+          LATEST=$(git tag -l | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -1)
           if [ -z "$LATEST" ]; then
             echo "No prior release tag — v${VERSION} will be the first release"
             exit 0
@@ -99,11 +100,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          set -euo pipefail
           if gh release view "v${VERSION}" >/dev/null 2>&1; then
-            echo "Removing partially published release v${VERSION}"
             gh release delete "v${VERSION}" --yes --cleanup-tag
-          elif git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
-            echo "Removing orphan tag v${VERSION}"
-            git push origin --delete "refs/tags/v${VERSION}"
           fi
