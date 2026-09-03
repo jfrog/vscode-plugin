@@ -80,19 +80,16 @@ Rules for the `inputs` block:
 ## VS Code's sandbox
 
 `chat.agent.sandbox.enabled` blocks filesystem access outside the workspace
-for the agent's terminal commands — not for MCP server `env`, where
-`${input:...}` values are resolved by VS Code itself and are unaffected. Two
-distinct failures, which can both look like "Agent Guard disabled" but aren't:
+for the agent's terminal commands only — MCP server `${input:...}` values are
+resolved by VS Code itself and unaffected.
 
-- `MODULE_NOT_FOUND` on Step 0's script — the script file itself is
-  unreadable; env vars don't help here. Re-run outside the sandbox (the
-  terminal tool's `sandboxBypass: true`, confirmed via the "Run in terminal
-  outside the sandbox?" prompt) or disable `chat.agent.sandbox.enabled`.
-- Unreadable `~/.jfrog/` (server resolves to Unknown) or `EROFS` on the npm
-  cache — unlike Codex, env vars still pass through the sandbox, so prefer
-  `JFROG_URL` + `JFROG_ACCESS_TOKEN` (see
-  [agent-guard-common.md](agent-guard-common.md)) over `--server`; fall back
-  to the bypass/disable option above if it still fails.
+- `MODULE_NOT_FOUND` on Step 0's script: the script itself is unreadable, env
+  vars won't help. Re-run with `sandboxBypass: true` ("Run in terminal
+  outside the sandbox?") or disable `chat.agent.sandbox.enabled`.
+- Unreadable `~/.jfrog/` (Unknown) or `EROFS` on the npm cache: unlike Codex,
+  env vars pass through the sandbox — prefer `JFROG_URL` +
+  `JFROG_ACCESS_TOKEN` ([agent-guard-common.md](agent-guard-common.md)) over
+  `--server`; same bypass fallback otherwise.
 
 ## Enable
 
