@@ -13,10 +13,13 @@ version and committed to this repo. They are not downloaded or resolved at
 runtime.
 
 Because the skills are bundled, updating them requires a new plugin release —
-there are no runtime skill updates. The skills are synced in on a `chore:
-sync skills to vX.Y.Z` cadence (see recent commit history), which brings in
-the latest pinned tag from `jfrog/jfrog-skills` and bumps the plugin version
-accordingly.
+there are no runtime skill updates. Skill-sync PRs bring in a pinned
+`jfrog/jfrog-skills` release and bump the plugin version accordingly.
+
+The README deliberately omits release numbers. The `version` in
+[`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json),
+mirrored by [`marketplace.json`](marketplace.json), and GitHub tags/releases
+are the authoritative plugin-version sources.
 
 ## Modules — vendored from `JFROG/jfrog-agent-hooks`
 
@@ -32,8 +35,10 @@ verifies the committed tree matches the pin (see
 [`sync-modules-integrity.json`](.github/scripts/sync-modules-integrity.json)
 for the per-file checksums used in that check).
 
-The current bundle uses `jfrog-agent-hooks/v0.11.1` as its base. Only upstream
-`modules/` are vendored; upstream tests remain in the source repository.
+The authoritative module release is the `pin` in
+[`.github/scripts/sync-modules-vendor.json`](.github/scripts/sync-modules-vendor.json).
+Only upstream `modules/` are vendored; upstream tests remain in the source
+repository.
 
 ## Not vendored
 
