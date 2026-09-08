@@ -236,6 +236,10 @@ The JFrog MCP is a remote HTTP server the plugin attaches at `https://${env:JFRO
 
 If the agent keeps falling back to the `jf` CLI even though the JFrog tools are present, it usually means the tools aren't selected in the picker — enable them and start a new chat. Make sure `JFROG_PLATFORM_URL` is set in the IDE launch environment so `https://${env:JFROG_PLATFORM_URL}/mcp` resolves correctly.
 
+### MCP management fails with `MODULE_NOT_FOUND`, `EROFS`, or "no jf CLI server(s) found"
+
+This happens when VS Code's `chat.agent.sandbox.enabled` setting is on: it restricts the agent's terminal commands to the workspace folder, and the skill's helper script and your `jf` config live outside it. Fix: when prompted, choose **"Run in terminal outside the sandbox?"**, or disable `chat.agent.sandbox.enabled` in VS Code settings.
+
 ---
 
 ## Support
