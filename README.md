@@ -238,7 +238,7 @@ If the agent keeps falling back to the `jf` CLI even though the JFrog tools are 
 
 ### MCP management fails with `MODULE_NOT_FOUND`, `EROFS`, or "no jf CLI server(s) found"
 
-VS Code's agent sandbox (`chat.agent.sandbox.enabled` set to `on`; macOS and Linux only) blocks the agent terminal from reading and writing under `$HOME` — where the skill's helper script, the npm cache, and your `jf` config live. Your JFrog setup is fine.
+VS Code's agent sandbox (`chat.agent.sandbox.enabled` set to `on`; macOS and Linux only) blocks the agent terminal from reading and writing under `$HOME` — where the skill's helper script, the npm cache, and your `jf` config live.
 
 **Recommended — approve only the blocked command.** VS Code offers to re-run it outside the sandbox. That prompt repeats whatever command the agent just tried, so read it before accepting. Accept only if it looks like one of these, and deny anything else:
 
