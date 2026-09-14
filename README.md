@@ -224,10 +224,16 @@ When a skill is about to run, a hook checks it against your JFrog governance pol
 
 Scope is **GitHub Copilot Chat**. VS Code can also host the Claude Code extension, which loads plugins through its own mechanism and governs skills with its own hook.
 
-The two entry points that carry a skill's identity are covered:
+Three entry points carry a skill's identity, and all three are covered:
 
 - you running a skill with `/<skill-name>`,
+- Copilot reading a skill's `SKILL.md` with its `read_file` tool — the usual path, see the coverage note below,
 - and Copilot invoking one through its `skill` tool.
+
+`/<skill-name>` is covered in Copilot Chat only. VS Code's Local agent and delegated sessions run
+hooks through a separate engine that discards what a `UserPromptSubmit` hook returns, so a typed
+skill name is not blocked there; the `read_file` and `skill` tool paths are unaffected, because that
+engine does honour a `PreToolUse` result.
 
 For each, the hook computes the skill's content **fingerprint** and asks the JFrog governance service for a verdict:
 
@@ -262,8 +268,9 @@ When a policy block carries a waiver scope, the block message shows the command 
 
 - Set `JFROG_PLATFORM_URL` and `JFROG_ACCESS_TOKEN` (or configure the JFrog CLI — see [Authentication](#authentication)) and `JF_PROJECT` (the JFrog project the skill runs in). For an entitled account with credentials but no project, skills are **blocked** with a message telling you what to set; with no credentials at all they are **allowed**, per the table above.
 - **Node.js (≥ 20) with `npx` on your `PATH`** — the hook resolves the Agent Guard through `npx`. Without it, governed actions are allowed unchecked.
+- **macOS and Linux only.** These hook commands are POSIX shell, and VS Code starts hooks with `cmd.exe` on Windows, where the command fails before the Agent Guard is reached — so skills run **unchecked** on Windows rather than being blocked. Windows support is tracked separately.
 - **Unlike the MCP alignment hook, this one does not pin the Agent Guard version.** It always resolves the latest published release, so a governance fix reaches you without waiting for a plugin release. `JFROG_AGENT_GUARD_REPO` still redirects the registry.
-- **Coverage limits.** Model-initiated invocation is governed only while `github.copilot.chat.skillTool.enabled` is on; with it off, a skill's body is injected into context with no tool call to intercept. Skills contributed by other extensions (`contributes.chatSkills`) are not searched, and neither are folders added through `chat.agentSkillsLocations`. Hooks are a VS Code Preview feature and can be disabled organization-side with no signal, so an absence of blocks never by itself means a skill was allowed.
+- **Coverage limits.** `github.copilot.chat.skillTool.enabled` is **off by default**, and with it off Copilot registers no `skill` tool — it instructs the model to read the matching `SKILL.md` with its `read_file` tool instead. That call reaches the `PreToolUse` hook and the Agent Guard governs it, so a default install is covered through `read_file` rather than through the skill tool. What is *not* covered: skills contributed by other extensions (`contributes.chatSkills`) are not searched, and neither are folders added through `chat.agentSkillsLocations`. A skill's content can also be reached without a governed surface — through a subagent, a terminal command, or a text search — and hooks are a VS Code Preview feature that can be disabled organization-side with no signal. An absence of blocks never by itself means a skill was allowed.
 - **Cost per call.** VS Code parses `matcher` for Claude Code compatibility but ignores its value, so the `PreToolUse` hook runs on *every* tool call, and `UserPromptSubmit` on every prompt. The prompt hook revalidates the Agent Guard against the registry; the tool hook reads that from cache, which is what keeps the per-call cost down.
 - To turn enforcement off, remove the `UserPromptSubmit` and `PreToolUse` entries from `plugin/hooks/hooks.json`.
 

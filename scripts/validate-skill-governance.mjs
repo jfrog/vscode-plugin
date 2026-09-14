@@ -100,8 +100,8 @@ process.stdin.on("end", () => {
 // `stdio: ["pipe", ...]` in agentHostMain.js — so `input:` below is faithful. Cursor does NOT:
 // it base64s the event into the command string and pipes it in from a pipeline the spawned shell
 // builds, leaving the child's own stdin as /dev/null. Testing Cursor this way is what let
-// MLAI-1310 ship — a top-level `;` in the command severed Cursor's pipeline and every skill was
-// silently allowed, while a stdin-based harness passed all 34 checks. If a third delivery shape
+// a regression ship — a top-level `;` in the command severed Cursor's pipeline and every skill
+// was silently allowed, while a stdin-based harness passed all 34 checks. If a third delivery shape
 // ever appears, model it here rather than reusing this one.
 function runHook(command, payload, { isolate = false, noDate = false, extraEnv = {} } = {}) {
   const result = spawnSync(SH, ["-c", command], {
@@ -279,7 +279,7 @@ const topLevelOf = (s) => {
 //
 //   * These command strings are kept deliberately identical across the Cursor, Claude Code and
 //     VS Code plugins, and on Cursor a top-level `;` severs the pipeline Cursor wraps around the
-//     command, silently allowing every skill (MLAI-1310). A string copied from here to there must
+//     command, silently allowing every skill. A string copied from here to there must
 //     not carry the defect with it.
 //   * "Harmless on today's client" is not a property to depend on. A one-simple-command hook works
 //     under every delivery model; one that relies on inheriting the shell's stdin does not.
@@ -289,7 +289,7 @@ check("no governed command has a top-level ';', '&&' or '||'", () => {
     for (const op of [";", "&&", "||"]) {
       assert(!top.includes(op),
         `${event}: a top-level "${op}" makes the hook depend on inheriting the shell's stdin. ` +
-        `On Cursor that silently allows every skill (MLAI-1310). Keep it inside $( ).\n` +
+        `On Cursor that silently allows every skill. Keep it inside $( ).\n` +
         `         top-level text: ${top.trim()}`);
     }
   }

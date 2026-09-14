@@ -26,7 +26,7 @@ The workflow reads the version from `plugin.json`, confirms `marketplace.json` a
 
 Things to know before changing it:
 
-- There is no plugin-layout validator in this repo, so a release is gated only on the two manifests agreeing. If a validator is added, run it as a step inside the release job as well: a separate workflow triggered by the same push can be red while a release still goes out.
+- A release is gated on the two manifests agreeing **and** on `scripts/validate-skill-governance.mjs`, which the release job runs directly. Keep it that way for any validator added later: `validate-skill-governance.yml` only triggers on pull requests, so it never sees the merge commit a release is cut from — a separate workflow triggered by the same push can be red while a release still goes out. The release job's steps carry no `if:` of their own; the version-comparison step fails the job outright, so everything after it already runs only on a real release.
 - The tag is created by the release, not before it. `gh release create --target` does both in one API call, so a failed run can't leave a tag behind with no release attached to it.
 
 ## Reporting Issues
