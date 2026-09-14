@@ -20,7 +20,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 | **Hook**  | MCP server alignment               | Secures installed plugins' `mcp.json` and `.mcp.json` server commands with JFrog Agent Guard at Copilot SessionStart.                                                                                                                                            |
 | **Skill** | Agent Guard                        | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 | **Hook**  | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session.                                                                                                                                                                                      |
-| **Hook**  | Skills governance                  | Check the skills you invoke against your JFrog governance policy and block the ones it disallows. Covers the two entry points that carry a skill's identity: `/<skill-name>` and Copilot's `skill` tool. Coverage differs by surface — see [Skills governance](#skills-governance). |
+| **Hook**  | Skills governance                  | Check the skills you invoke against your JFrog governance policy and block the ones it disallows. Covers the three entry points that carry a skill's identity: `/<skill-name>`, Copilot's `read_file` of a `SKILL.md`, and its `skill` tool. Coverage differs by surface — see [Skills governance](#skills-governance). |
 
 ---
 
