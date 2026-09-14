@@ -52,6 +52,11 @@ const nodeDir = path.join(sandbox, "node-only");
 mkdirSync(nodeDir, { recursive: true });
 symlinkSync(process.execPath, path.join(nodeDir, "node"));
 symlinkSync("/bin/date", path.join(nodeDir, "date"));
+// The same directory WITHOUT `date`, for the one check that asserts the degrade path. Separated
+// from nodeDir so every other check exercises the real clock rather than its degraded form.
+const noDateDir = path.join(sandbox, "node-only-nodate");
+mkdirSync(noDateDir, { recursive: true });
+symlinkSync(process.execPath, path.join(noDateDir, "node"));
 
 const failures = [];
 const check = async (label, fn) => {
@@ -98,13 +103,13 @@ process.stdin.on("end", () => {
 // MLAI-1310 ship — a top-level `;` in the command severed Cursor's pipeline and every skill was
 // silently allowed, while a stdin-based harness passed all 34 checks. If a third delivery shape
 // ever appears, model it here rather than reusing this one.
-function runHook(command, payload, { isolate = false, extraEnv = {} } = {}) {
+function runHook(command, payload, { isolate = false, noDate = false, extraEnv = {} } = {}) {
   const result = spawnSync(SH, ["-c", command], {
     input: Buffer.from(payload),
     encoding: "buffer",
     timeout: 30_000,
     env: {
-      PATH: isolate ? nodeDir : `${binDir}:${nodeDir}`,
+      PATH: isolate ? nodeDir : `${binDir}:${noDate ? noDateDir : nodeDir}`,
       HOME: sandbox,
       CLAUDE_PLUGIN_ROOT: pluginRoot,
       ...extraEnv,
@@ -328,6 +333,23 @@ for (const event of GOVERNED_EVENTS) {
     const deadline = Number(seen.deadline);
     assert(Number.isFinite(deadline) && deadline > before,
       `the deadline must be recomputed, not inherited; got ${seen.deadline}`);
+  });
+
+  // The static check above proves the command CONTAINS the `${_JFAG_NOW:+…}` guard; only running
+  // it with no date(1) on PATH proves the guard does what the guard is for. EMPTY is the required
+  // outcome, not merely "some value": agent-guard ignores an empty deadline and falls back to its
+  // own budget, whereas a garbage epoch (what `$(($(date +%s) + 25))` degrades to — `$(( + 25))`
+  // = 25, an instant in 1970) floors that budget at 500ms and blocks every skill.
+  await check(`${event}: with no date(1) on PATH, the deadline degrades to EMPTY and the payload still arrives`, async () => {
+    const record = stubNpx({ stdout: `{"continue":true}` });
+    const payload = payloadFor(event);
+    const r = runHook(commandFor(event), payload, { noDate: true });
+    assert(r.code === 0, `exit=${r.code} stderr=${r.stderr}`);
+    const seen = JSON.parse(readFileSync(record, "utf8"));
+    assert(seen.deadline === "",
+      `an unreadable clock must yield an EMPTY deadline, not a stale or garbage one; got ${JSON.stringify(seen.deadline)}`);
+    assert(seen.stdin === payload,
+      `losing date(1) must not cost the payload: agent-guard received ${seen.stdin.length} bytes, expected ${payload.length}`);
   });
 
   await check(`${event}: forwards a deny verbatim and exits 0 (the JSON decides)`, async () => {
