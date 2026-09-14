@@ -17,9 +17,13 @@ import { execFileSync } from "node:child_process";
 import process from "node:process";
 
 import { isMainEntry } from "./entry.mjs";
+import { skillsProductUserAgent } from "./jf-user-agent.mjs";
 
 export const SETTINGS_PATH =
   "/ml/core/api/v1/administration/account-settings/mcp_gateway_plugin_enabled";
+// Self-hosted JPDs serve the same API behind `/bridge-client`. Tried ONLY
+// after the root path 404s, so SaaS still costs exactly one request.
+export const BRIDGE_CLIENT_PREFIX = "/bridge-client";
 export const REQUEST_TIMEOUT_MS = 5000;
 
 export const EXIT_ENABLED = 0;
@@ -167,6 +171,11 @@ function resolveFromCliConfig(opts) {
   };
 }
 
+/** Drops the internal `notFound` marker from a fetchSetting() result. */
+function strip({ notFound: _notFound, ...result }) {
+  return result;
+}
+
 /**
  * @param {string} baseUrl
  * @param {string} token
@@ -182,7 +191,43 @@ export async function isGatewayPluginEnabled(baseUrl, token, opts = {}) {
   const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
   const root = baseUrl.replace(/\/+$/, "").replace(/\/artifactory$/, "");
-  const url = root + SETTINGS_PATH;
+
+  const rootResult = await fetchSetting(root + SETTINGS_PATH, token, {
+    debug,
+    fetchFn,
+    timeoutMs,
+  });
+  if (!rootResult.notFound) return strip(rootResult);
+
+  // Root 404 -> possibly self-hosted. Each attempt gets its OWN timeout
+  // budget: a reused AbortController would start the retry already spent.
+  debug(
+    `Root ${SETTINGS_PATH} returned 404; retrying behind ${BRIDGE_CLIENT_PREFIX}.`,
+  );
+  const bridgeResult = await fetchSetting(
+    root + BRIDGE_CLIENT_PREFIX + SETTINGS_PATH,
+    token,
+    { debug, fetchFn, timeoutMs },
+  );
+  // Bridge may only UPGRADE the verdict; anything else keeps the root result.
+  if (bridgeResult.ok || bridgeResult.registryOff) return strip(bridgeResult);
+  return strip(rootResult);
+}
+
+/**
+ * One HTTP attempt against a fully-built settings URL. `notFound` marks the
+ * 404 that triggers the `/bridge-client` retry; callers strip it before
+ * returning so the public result shape is unchanged.
+ *
+ * @param {string} url
+ * @param {string} token
+ * @param {{
+ *   fetchFn: typeof fetch,
+ *   timeoutMs: number,
+ *   debug: (message: string) => void,
+ * }} opts
+ */
+async function fetchSetting(url, token, { debug, fetchFn, timeoutMs }) {
   debug(`Fetching gateway plugin setting from ${url}`);
 
   const controller = new AbortController();
@@ -193,6 +238,7 @@ export async function isGatewayPluginEnabled(baseUrl, token, opts = {}) {
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
+        "User-Agent": skillsProductUserAgent(),
       },
       signal: controller.signal,
     });
@@ -200,6 +246,7 @@ export async function isGatewayPluginEnabled(baseUrl, token, opts = {}) {
       debug(`Settings request returned HTTP ${response.status}.`);
       return {
         ok: false,
+        notFound: response.status === 404,
         reason: `settings endpoint returned HTTP ${response.status}`,
       };
     }
