@@ -20,6 +20,7 @@ The JFrog plugin provides the following capabilities, grouped by component:
 | **Hook**  | MCP server alignment               | Secures installed plugins' `mcp.json` and `.mcp.json` server commands with JFrog Agent Guard at Copilot SessionStart.                                                                                                                                            |
 | **Skill** | Agent Guard                        | Copilot manages MCPs through the JFrog Agent Guard. Through it you can discover, install, configure, update, and remove MCP servers from the JFrog AI Catalog approved for your project, and authenticate to remote HTTP MCPs via OAuth, API key, or bearer token. |
 | **Hook**  | Agent Package Resolution (Preview) | Inject Artifactory routing instructions at the start of each Copilot session.                                                                                                                                                                                      |
+| **Hook**  | Skills governance                  | Check the skills you invoke against your JFrog governance policy and block the ones it disallows. Covers the three entry points that carry a skill's identity: `/<skill-name>`, Copilot's `read_file` of a `SKILL.md`, and its `skill` tool. Coverage differs by surface — see [Skills governance](#skills-governance). |
 
 ---
 
@@ -216,6 +217,62 @@ rewritten MCP servers.
 ### How secrets are handled
 
 When an MCP server requires a sensitive configuration, the agent cannot set the value directly. Instead, it returns a CLI command for you to copy and run in your terminal. Secrets such as API keys, tokens, and connection strings are never exposed in the agent chat history.
+
+### Skills governance
+
+When a skill is about to run, a hook checks it against your JFrog governance policy and blocks it if policy disallows it. Enforcement runs entirely in the JFrog Agent Guard; the hook only carries the event to it.
+
+Scope is **GitHub Copilot Chat**. VS Code can also host the Claude Code extension, which loads plugins through its own mechanism and governs skills with its own hook.
+
+Three entry points carry a skill's identity, and all three are covered:
+
+- you running a skill with `/<skill-name>`,
+- Copilot reading a skill's `SKILL.md` with its `read_file` tool — the usual path, see the coverage note below,
+- and Copilot invoking one through its `skill` tool.
+
+`/<skill-name>` is covered in Copilot Chat only. VS Code's Local agent and delegated sessions run
+hooks through a separate engine that discards what a `UserPromptSubmit` hook returns, so a typed
+skill name is not blocked there; the `read_file` and `skill` tool paths are unaffected, because that
+engine does honour a `PreToolUse` result.
+
+For each, the hook computes the skill's content **fingerprint** and asks the JFrog governance service for a verdict:
+
+| Verdict | What happens |
+| --- | --- |
+| **Allowed** | The skill runs. |
+| **Blocked** | The skill is prevented from running, and each violated policy is named along with the reason it failed. |
+| **Not yet scanned** | The skill is submitted for an on-the-fly scan and blocked with a "scan started — retry shortly" message. |
+| **Not entitled** | If your account isn't entitled to AI Catalog skills governance, enforcement is skipped and skills run normally. |
+
+Skills are looked for under `<project>/{.github,.claude,.agents}/skills` and `~/{.copilot,.claude,.agents}/skills`, and at each ancestor of the workspace root. The plugin's own bundled skills are exempt — that exemption is by location, not by name, and it runs before any credential or network work so the plugin keeps working when governance is unconfigured.
+
+#### Requesting a waiver
+
+When a policy block carries a waiver scope, the block message shows the command that requests one, against the blocking policy's application, stage, and gate, with your justification attached. The Agent Guard files it — `agent-guard --request-waiver` — so the plugin holds no credentials and no waiver logic of its own. The request goes to your project admin for review; it does not unblock the skill on its own, and nothing is submitted unless you ask for it and give a reason.
+
+**Requirements & behavior**
+
+> [!IMPORTANT]
+> **A verdict reaches VS Code as JSON on the hook's stdout.** Three outcomes, and they are distinct:
+>
+> - **Your JFrog policies deny the skill** — **blocked**, naming the policies it violated and the
+>   command to request a waiver.
+> - **The Agent Guard reaches the check but cannot finish it in time** — **blocked**. It writes a
+>   refusal explaining that it could not answer. It got as far as the check, so it does not guess.
+> - **The Agent Guard cannot be *run at all*** — `npx` missing, the registry unreachable, no JFrog
+>   server configured, or it fails internally — **allowed**. A machine that cannot get a verdict is
+>   not governed by it, and blocking there would stop work without enforcing anything.
+>
+> A user who is entitled to nothing is unaffected either way: the Agent Guard answers "allow" for an
+> unconfigured or unentitled user, so no setup is needed to opt out of the feature.
+
+- Set `JFROG_PLATFORM_URL` and `JFROG_ACCESS_TOKEN` (or configure the JFrog CLI — see [Authentication](#authentication)) and `JF_PROJECT` (the JFrog project the skill runs in). For an entitled account with credentials but no project, skills are **blocked** with a message telling you what to set; with no credentials at all they are **allowed**, per the table above.
+- **Node.js (≥ 20) with `npx` on your `PATH`** — the hook resolves the Agent Guard through `npx`. Without it, governed actions are allowed unchecked.
+- **macOS and Linux only.** These hook commands are POSIX shell, and VS Code starts hooks with `cmd.exe` on Windows, where the command fails before the Agent Guard is reached — so skills run **unchecked** on Windows rather than being blocked. Windows support is tracked separately.
+- **Unlike the MCP alignment hook, this one does not pin the Agent Guard version.** It always resolves the latest published release, so a governance fix reaches you without waiting for a plugin release. `JFROG_AGENT_GUARD_REPO` still redirects the registry.
+- **Coverage limits.** `github.copilot.chat.skillTool.enabled` is **off by default**, and with it off Copilot registers no `skill` tool — it instructs the model to read the matching `SKILL.md` with its `read_file` tool instead. That call reaches the `PreToolUse` hook and the Agent Guard governs it, so a default install is covered through `read_file` rather than through the skill tool. What is *not* covered: skills contributed by other extensions (`contributes.chatSkills`) are not searched, and neither are folders added through `chat.agentSkillsLocations`. A skill's content can also be reached without a governed surface — through a subagent, a terminal command, or a text search — and hooks are a VS Code Preview feature that can be disabled organization-side with no signal. An absence of blocks never by itself means a skill was allowed.
+- **Cost per call.** VS Code parses `matcher` for Claude Code compatibility but ignores its value, so the `PreToolUse` hook runs on *every* tool call, and `UserPromptSubmit` on every prompt. The prompt hook revalidates the Agent Guard against the registry; the tool hook reads that from cache, which is what keeps the per-call cost down.
+- To turn enforcement off, remove the `UserPromptSubmit` and `PreToolUse` entries from `plugin/hooks/hooks.json`.
 
 ---
 
