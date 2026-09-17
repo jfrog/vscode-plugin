@@ -119,9 +119,14 @@ Resolve choices in this order:
 ## Choice UI
 
 Use the agent surface's native interactive single-choice picker (an arrow-key
-selectable menu, such as VS Code's Quick Pick UI) whenever a version or repo
-choice is required. Do not print a table and wait for a typed reply when a
-picker is available.
+selectable menu) whenever a version or repo choice is required and such a
+picker is available to the skill. Do not print a table and wait for a typed
+reply when a picker is available.
+
+**GitHub Copilot Chat (this harness) has no such picker.** Skills here run as
+chat-turn instructions with no programmatic access to VS Code's native
+`showQuickPick` UI, so always use the Markdown table fallback below for
+version and repo choices — never claim or imply an arrow-key picker exists.
 
 - Version picker: label each option with only the version string, newest first.
   Do not include repo keys before the version is settled.
@@ -129,11 +134,10 @@ picker is available.
   `<slug>@<version>` in that option's description or subtitle, not its label.
 - Do not append "(allowed)" to repo labels. Every returned location is already
   allowed.
-- Only when no interactive picker exists in the current context, fall back to a
-  Markdown table followed by a plain-language question. Use one **Version**
-  column (newest first) for versions or one **Repository** column (`repoKey`
-  only) for repos, and name `<slug>@<version>` in the repo question. Never add
-  an "(allowed)" annotation.
+- Fall back to a Markdown table followed by a plain-language question. Use one
+  **Version** column (newest first) for versions or one **Repository** column
+  (`repoKey` only) for repos, and name `<slug>@<version>` in the repo
+  question. Never add an "(allowed)" annotation.
 
 ## When evidence verification fails
 
