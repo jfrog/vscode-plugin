@@ -3,9 +3,12 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
-// Tests the skill-governance hook wiring. hooks.json invokes agent-guard DIRECTLY via npx — no
-// plugin-side governance code at all — so this validator asserts the wiring's shape and then
-// EXECUTES the real command string out of hooks.json against a stub agent-guard.
+// Tests the skill-governance hook wiring. hooks.json starts a node launcher, which spawns
+// agent-guard via npx. The launcher is not a policy engine: it only builds the argv, the
+// deadline, and a spawn that Windows can run. VS Code executes the hook string with
+// PowerShell when ComSpec is cmd.exe, so the string itself cannot be a POSIX one-liner.
+// This validator asserts that shape, the Windows spawn plan, and then EXECUTES the real
+// command string out of hooks.json against a stub agent-guard.
 //
 // Four properties carry the whole design:
 //
@@ -29,13 +32,14 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, w
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pluginRoot = path.join(repoRoot, "plugin");
 const hooks = JSON.parse(readFileSync(path.join(pluginRoot, "hooks", "hooks.json"), "utf8"));
 
 const RELEASES_REGISTRY = "https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/";
+const LAUNCHER_COMMAND = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/enforce-skill.mjs"';
 const GOVERNED_EVENTS = ["UserPromptSubmit", "PreToolUse"];
 // An absolute sh: the PATH below is deliberately minimal, so `sh` by name would not resolve.
 const SH = "/bin/sh";
@@ -82,7 +86,7 @@ const fs = require("node:fs");
 let input = "";
 process.stdin.on("data", (d) => (input += d));
 process.stdin.on("end", () => {
-  fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), stdin: input, deadline: process.env.JF_AGENT_GUARD_ENFORCE_DEADLINE ?? "" }));
+  fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), stdin: input, deadline: process.env.JF_AGENT_GUARD_ENFORCE_DEADLINE ?? "", retries: process.env.npm_config_fetch_retries ?? "", fetchTimeout: process.env.npm_config_fetch_timeout ?? "" }));
   if (${JSON.stringify(stdout)}) process.stdout.write(${JSON.stringify(stdout)});
   process.exit(${exitCode});
 });
@@ -175,20 +179,25 @@ check("one governed hook refreshes the npx cache, the other reads it", () => {
 });
 
 for (const event of GOVERNED_EVENTS) {
-  check(`${event} invokes agent-guard through npx only, with no plugin script in the path`, () => {
+  check(`${event} starts the node launcher, with no POSIX syntax in the hook string`, () => {
     const entries = hooksFor(event);
     assert(entries.length === 1, `expected exactly one ${event} hook, got ${entries.length}`);
     const h = entries[0];
     assert(h.type === "command", `${event} must be a command hook, got ${h.type}`);
-    assert(/(^|\s)npx\s/.test(h.command), `${event} must invoke npx directly, got: ${h.command}`);
+    const expected = event === "PreToolUse"
+      ? `${LAUNCHER_COMMAND} --prefer-offline`
+      : LAUNCHER_COMMAND;
+    assert(h.command === expected,
+      `${event} must be the node launcher. A POSIX env prefix or $(...) never starts under ` +
+      `PowerShell, which is what VS Code uses on Windows. Got: ${h.command}`);
+    const beyondPluginRoot = h.command.replaceAll("${CLAUDE_PLUGIN_ROOT}", "");
+    assert(!beyondPluginRoot.includes("$"),
+      `${event} command must not use shell substitution other than the plugin-root token ` +
+      `VS Code expands before the shell runs`);
     assert(!h.command.includes("command -v"),
       `${event} must not have a PATH fast path: a hijackable agent-guard earlier on PATH would win`);
     assert(!/block-skill|governance-client|skill-path|request-waiver|--waiver-helper/.test(h.command),
       `${event} must not route through a plugin governance script; agent-guard owns the waiver flow`);
-    assert(h.command.includes("--enforce-skill") && h.command.includes("--client vscode"),
-      `${event} must pass --enforce-skill --client vscode`);
-    assert(h.command.includes(RELEASES_REGISTRY),
-      `${event} must default to the releases registry, so the artifact is the published one`);
   });
 
   check(`${event} carries no matcher, which VS Code would ignore anyway`, () => {
@@ -203,45 +212,20 @@ for (const event of GOVERNED_EVENTS) {
       `block refuses every skill on a machine that simply cannot run the guard`);
   });
 
-  check(`${event} lets npx cold-start and bounds its fetch`, () => {
+  check(`${event} leaves time for an npx cold start`, () => {
     const h = hooksFor(event)[0];
     assert((h.timeout ?? 0) >= 30, `${event} timeout ${h.timeout} is too short for an npx cold start`);
-    const retries = /npm_config_fetch_retries=(\d+)/.exec(h.command);
-    const fetchTimeout = /npm_config_fetch_timeout=(\d+)/.exec(h.command);
-    assert(retries && Number(retries[1]) === 0,
-      `${event} must set npm_config_fetch_retries=0: npm's default of 2 backs off 10s then 60s`);
-    // The VALUE, not just its presence: npm_config_fetch_timeout=300000 is npm's own default, so
-    // asserting presence alone would let an edit back to the default pass unnoticed.
-    assert(fetchTimeout && Number(fetchTimeout[1]) <= 10_000,
-      `${event} must set npm_config_fetch_timeout <= 10000 (npm's default is 300000ms), got ${fetchTimeout?.[1]}`);
   });
 
-  check(`${event} computes the deadline fresh, with no inheritable fallback`, () => {
-    const h = hooksFor(event)[0];
-    assert(/_JFAG_NOW=\$\(date \+%s 2>\/dev\/null\);/.test(h.command),
-      `${event} must read the clock defensively, tolerating an absent date(1)`);
-    // Computed INSIDE a command substitution, so the `;` the clock read needs is scoped and the
-    // hook stays one simple command. See the top-level-operator check below for why.
-    assert(h.command.includes(
-      'JF_AGENT_GUARD_ENFORCE_DEADLINE="$(_JFAG_NOW=$(date +%s 2>/dev/null); ' +
-      'echo ${_JFAG_NOW:+$((_JFAG_NOW + 25))})"'),
-      `${event} must compute an absolute deadline at invocation time INSIDE a command ` +
-      `substitution, and pass EMPTY when the clock could not be read: agent-guard ignores an ` +
-      `empty deadline and falls back to its own budget, whereas a garbage epoch floors the ` +
-      `budget at 500ms and blocks every skill`);
-    assert(!/JF_AGENT_GUARD_ENFORCE_DEADLINE:[-=]/.test(h.command),
-      `${event} must not fall back to an inherited value: an absolute instant inherited from an ` +
-      `earlier process pins every later invocation to the past`);
-  });
-
-  check(`${event} cannot pin the agent-guard version`, () => {
+  check(`${event} cannot pin the agent-guard version from the hook string`, () => {
     const h = hooksFor(event)[0];
     // Deliberately unlike the MCP-align hook, which pins on purpose. Governance must pick up a
-    // shipped GA fix without waiting for a plugin release.
+    // shipped GA fix without waiting for a plugin release. The package spec itself lives in the
+    // launcher; the hook string must not grow a pin of its own.
     assert(!h.command.includes("JFROG_AGENT_GUARD_VERSION"),
       `${event} must resolve latest, so a shipped GA fix reaches users without a plugin release`);
-    assert(/@jfrog\/agent-guard(\s|$)/.test(h.command),
-      `${event} must name the package unpinned: ${h.command}`);
+    assert(!/@jfrog\/agent-guard@/.test(h.command),
+      `${event} hook string must not pin the package: ${h.command}`);
   });
 }
 
@@ -295,6 +279,61 @@ check("no governed command has a top-level ';', '&&' or '||'", () => {
   }
 });
 
+await check("the launcher spawns npx.cmd through cmd.exe on Windows and does not pin a version", async () => {
+  const launcherUrl = pathToFileURL(path.join(pluginRoot, "scripts", "enforce-skill.mjs")).href;
+  const mod = await import(launcherUrl);
+  assert(typeof mod.resolveEnforceSpawn === "function",
+    "enforce-skill.mjs must export resolveEnforceSpawn");
+  const nowSec = 1_700_000_000;
+  const common = {
+    env: {
+      JF_AGENT_GUARD_ENFORCE_DEADLINE: "1",
+      JFROG_AGENT_GUARD_VERSION: "0.0.0-master.1.gabc",
+      PATH: "C:\\Windows\\System32",
+    },
+    nowSec,
+  };
+  const win = mod.resolveEnforceSpawn({ ...common, preferOffline: true, platform: "win32" });
+  assert(win.command === "npx.cmd", `Windows must spawn npx.cmd, got ${win.command}`);
+  assert(win.shell === "cmd.exe",
+    `Windows must pin cmd.exe so ComSpec cannot select PowerShell, got ${String(win.shell)}`);
+  assert(win.args.includes('"--prefer-offline"'), `missing offline flag: ${win.args}`);
+  assert(win.args.includes(`"${RELEASES_REGISTRY}"`), `registry must be quoted for cmd.exe: ${win.args}`);
+  assert(win.args.includes('"@jfrog/agent-guard"'), `package spec must stay unpinned: ${win.args}`);
+  assert(!win.args.some((arg) => arg.includes("@jfrog/agent-guard@")),
+    `JFROG_AGENT_GUARD_VERSION must not pin the spec: ${win.args}`);
+  assert(win.env.JF_AGENT_GUARD_ENFORCE_DEADLINE === String(nowSec + 25),
+    `deadline must replace an inherited value; got ${win.env.JF_AGENT_GUARD_ENFORCE_DEADLINE}`);
+  assert(win.env.npm_config_fetch_retries === "0",
+    "npm_config_fetch_retries=0 is required: npm's default of 2 backs off 10s then 60s");
+  assert(win.env.npm_config_fetch_timeout === "10000",
+    `npm_config_fetch_timeout must be 10000 (npm's default is 300000), got ${win.env.npm_config_fetch_timeout}`);
+  const quoted = mod.resolveEnforceSpawn({
+    preferOffline: false,
+    env: { JFROG_AGENT_GUARD_REPO: "https://example.invalid/npm/?a=1&b=2" },
+    nowSec,
+    platform: "win32",
+  });
+  assert(quoted.args.includes('"https://example.invalid/npm/?a=1&b=2"'),
+    `a registry & must stay inside one cmd.exe argument: ${quoted.args}`);
+  assert(!quoted.args.includes('"--prefer-offline"'),
+    `UserPromptSubmit must refresh the cache: ${quoted.args}`);
+  const unix = mod.resolveEnforceSpawn({ ...common, preferOffline: false, platform: "linux" });
+  assert(unix.command === "npx" && unix.shell === false,
+    `Unix must spawn npx with no shell, got ${unix.command} shell=${String(unix.shell)}`);
+  assert(unix.args[unix.args.indexOf("--registry") + 1] === RELEASES_REGISTRY,
+    `default registry drifted: ${unix.args}`);
+  assert(!unix.args.includes("--prefer-offline"), `offline flag leaked: ${unix.args}`);
+  const stale = mod.resolveEnforceSpawn({
+    preferOffline: false,
+    env: { JF_AGENT_GUARD_ENFORCE_DEADLINE: "1" },
+    nowSec: Number.NaN,
+    platform: "linux",
+  });
+  assert(stale.env.JF_AGENT_GUARD_ENFORCE_DEADLINE === undefined,
+    `an unusable clock must drop an inherited deadline, got ${stale.env.JF_AGENT_GUARD_ENFORCE_DEADLINE}`);
+});
+
 // ---------------------------------------------------------------------------
 // Behavioural: execute the real hooks.json command string.
 // ---------------------------------------------------------------------------
@@ -320,6 +359,13 @@ for (const event of GOVERNED_EVENTS) {
     assert(seen.argv[seen.argv.indexOf("--client") + 1] === "vscode", `bad --client: ${seen.argv}`);
     assert(seen.argv[seen.argv.indexOf("--registry") + 1] === RELEASES_REGISTRY,
       `must default to the releases registry: ${seen.argv}`);
+    if (event === "PreToolUse") {
+      assert(seen.argv.includes("--prefer-offline"), `PreToolUse must read the npx cache: ${seen.argv}`);
+    } else {
+      assert(!seen.argv.includes("--prefer-offline"), `UserPromptSubmit must refresh the registry: ${seen.argv}`);
+    }
+    assert(seen.retries === "0" && seen.fetchTimeout === "10000",
+      `fetch must be bounded: retries=${seen.retries} timeout=${seen.fetchTimeout}`);
   });
 
   await check(`${event}: hands agent-guard a deadline in the future, computed at invocation`, async () => {
@@ -335,19 +381,19 @@ for (const event of GOVERNED_EVENTS) {
       `the deadline must be recomputed, not inherited; got ${seen.deadline}`);
   });
 
-  // The static check above proves the command CONTAINS the `${_JFAG_NOW:+…}` guard; only running
-  // it with no date(1) on PATH proves the guard does what the guard is for. EMPTY is the required
-  // outcome, not merely "some value": agent-guard ignores an empty deadline and falls back to its
-  // own budget, whereas a garbage epoch (what `$(($(date +%s) + 25))` degrades to — `$(( + 25))`
-  // = 25, an instant in 1970) floors that budget at 500ms and blocks every skill.
-  await check(`${event}: with no date(1) on PATH, the deadline degrades to EMPTY and the payload still arrives`, async () => {
+  // The deadline used to be $(date +%s) inside the hook string. That binary is absent from a
+  // minimal Windows PATH, and PowerShell cannot parse the substitution anyway. The launcher
+  // reads the clock in process, so a missing date(1) must not empty the deadline or drop stdin.
+  await check(`${event}: with no date(1) on PATH, the deadline is still in the future and the payload arrives`, async () => {
     const record = stubNpx({ stdout: `{"continue":true}` });
     const payload = payloadFor(event);
+    const before = Math.floor(Date.now() / 1000);
     const r = runHook(commandFor(event), payload, { noDate: true });
     assert(r.code === 0, `exit=${r.code} stderr=${r.stderr}`);
     const seen = JSON.parse(readFileSync(record, "utf8"));
-    assert(seen.deadline === "",
-      `an unreadable clock must yield an EMPTY deadline, not a stale or garbage one; got ${JSON.stringify(seen.deadline)}`);
+    const deadline = Number(seen.deadline);
+    assert(Number.isFinite(deadline) && deadline > before,
+      `a missing date(1) must not block the clock; got ${JSON.stringify(seen.deadline)}`);
     assert(seen.stdin === payload,
       `losing date(1) must not cost the payload: agent-guard received ${seen.stdin.length} bytes, expected ${payload.length}`);
   });
