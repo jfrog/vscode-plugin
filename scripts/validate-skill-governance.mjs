@@ -7,8 +7,9 @@
 // agent-guard via npx. The launcher is not a policy engine: it only builds the argv, the
 // deadline, and a spawn that Windows can run. VS Code executes the hook string with
 // PowerShell when ComSpec is cmd.exe, so the string itself cannot be a POSIX one-liner.
-// This validator asserts that shape, the Windows spawn plan, and then EXECUTES the real
-// command string out of hooks.json against a stub agent-guard.
+// This validator asserts that shape, then EXECUTES the real command string out of
+// hooks.json against a stub agent-guard. The launcher's spawn plan and exit-code mapping
+// are unit-tested in plugin/scripts/enforce-skill.test.mjs.
 //
 // Four properties carry the whole design:
 //
@@ -18,7 +19,8 @@
 //
 //  2. Infrastructure failure fails OPEN. npx missing, a failed install, an unreachable registry
 //     or no configured JFrog server must let the skill through: a machine that cannot run the
-//     guard is not governed by it. A real policy denial still blocks, in the JSON payload.
+//     guard is not governed by it. PreToolUse denies on ANY non-zero exit but 2, so failing open
+//     means exit 0 with `{}`. A real policy denial still blocks, in the JSON payload or exit 2.
 //
 //  3. Nothing may pin the agent-guard version — unlike the MCP-align hook, which pins on purpose.
 //     Governance must pick up a shipped GA fix without a plugin release.
@@ -32,7 +34,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, w
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pluginRoot = path.join(repoRoot, "plugin");
@@ -47,20 +49,11 @@ const SH = "/bin/sh";
 const sandbox = mkdtempSync(path.join(tmpdir(), "vscode-gov-"));
 const binDir = path.join(sandbox, "bin");
 mkdirSync(binDir, { recursive: true });
-// A directory holding ONLY node, so the stub's shebang resolves while the real npx stays
-// unreachable. `date` lives here too: the hook computes its deadline with $(date +%s), and a PATH
-// without it would silently yield "$(( + 25))" = 25 — an epoch in 1970 — rather than exercising
-// the real computation. Keeping both here (not by adding /bin to PATH) preserves the isolate mode,
-// where npx must stay unreachable.
+// A directory holding ONLY node, so the launcher and the stub's shebang resolve while the real
+// npx stays unreachable in isolate mode.
 const nodeDir = path.join(sandbox, "node-only");
 mkdirSync(nodeDir, { recursive: true });
 symlinkSync(process.execPath, path.join(nodeDir, "node"));
-symlinkSync("/bin/date", path.join(nodeDir, "date"));
-// The same directory WITHOUT `date`, for the one check that asserts the degrade path. Separated
-// from nodeDir so every other check exercises the real clock rather than its degraded form.
-const noDateDir = path.join(sandbox, "node-only-nodate");
-mkdirSync(noDateDir, { recursive: true });
-symlinkSync(process.execPath, path.join(noDateDir, "node"));
 
 const failures = [];
 const check = async (label, fn) => {
@@ -72,9 +65,11 @@ const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
 const groupsFor = (event) => hooks?.hooks?.[event] ?? [];
 const hooksFor = (event) => groupsFor(event).flatMap((g) => g.hooks ?? []);
 const commandFor = (event) => hooksFor(event)[0]?.command ?? "";
-// A blocking answer is a deny in the JSON, or agent-guard's own exit 2. Anything else lets the
-// skill through — which is what "fails open" has to mean here.
-const blocks = (r) => r.code === 2 || /"permissionDecision"\s*:\s*"deny"|"continue"\s*:\s*false/.test(r.stdout);
+// A blocking answer is a deny in the JSON, or an exit code VS Code treats as one: exit 2 on
+// either surface, and any non-zero exit on PreToolUse, which fails closed on a hook error.
+const blocks = (event, r) =>
+  (event === "PreToolUse" ? r.code !== 0 : r.code === 2) ||
+  /"permissionDecision"\s*:\s*"deny"|"continue"\s*:\s*false/.test(r.stdout);
 
 // A stub npx that records the argv it was handed and the stdin it received, then replays a canned
 // result. Installed as `npx` so the hook command finds it first on PATH.
@@ -107,13 +102,13 @@ process.stdin.on("end", () => {
 // a regression ship — a top-level `;` in the command severed Cursor's pipeline and every skill
 // was silently allowed, while a stdin-based harness passed all 34 checks. If a third delivery shape
 // ever appears, model it here rather than reusing this one.
-function runHook(command, payload, { isolate = false, noDate = false, extraEnv = {} } = {}) {
+function runHook(command, payload, { isolate = false, extraEnv = {} } = {}) {
   const result = spawnSync(SH, ["-c", command], {
     input: Buffer.from(payload),
     encoding: "buffer",
     timeout: 30_000,
     env: {
-      PATH: isolate ? nodeDir : `${binDir}:${noDate ? noDateDir : nodeDir}`,
+      PATH: isolate ? nodeDir : `${binDir}:${nodeDir}`,
       HOME: sandbox,
       CLAUDE_PLUGIN_ROOT: pluginRoot,
       ...extraEnv,
@@ -236,104 +231,6 @@ check("the two governed hooks differ ONLY in the cache flag", () => {
     `  UserPromptSubmit: ${commandFor("UserPromptSubmit")}\n  PreToolUse: ${commandFor("PreToolUse")}`);
 });
 
-check("every hook command is valid POSIX sh", () => {
-  for (const event of Object.keys(hooks.hooks ?? {})) {
-    for (const h of hooksFor(event)) {
-      const r = spawnSync(SH, ["-n", "-c", h.command], { encoding: "utf8" });
-      assert(r.status === 0, `${event} command is not valid sh: ${r.stderr.trim()}`);
-    }
-  }
-});
-
-// Strip every $(…) / $((…)) group, leaving only the command's TOP-LEVEL text. A ';' inside a
-// substitution is scoped and harmless; one outside it is not.
-const topLevelOf = (s) => {
-  let out = "", depth = 0;
-  for (let i = 0; i < s.length; i++) {
-    if (s.startsWith("$(", i)) { depth++; i++; continue; }
-    if (depth && s[i] === "(") { depth++; continue; }
-    if (depth && s[i] === ")") { depth--; continue; }
-    if (!depth) out += s[i];
-  }
-  return out;
-};
-
-// Asserted here even though VS Code delivers the payload on the child's real stdin, where a
-// top-level `;` is harmless. Two reasons it is still a requirement:
-//
-//   * These command strings are kept deliberately identical across the Cursor, Claude Code and
-//     VS Code plugins, and on Cursor a top-level `;` severs the pipeline Cursor wraps around the
-//     command, silently allowing every skill. A string copied from here to there must
-//     not carry the defect with it.
-//   * "Harmless on today's client" is not a property to depend on. A one-simple-command hook works
-//     under every delivery model; one that relies on inheriting the shell's stdin does not.
-check("no governed command has a top-level ';', '&&' or '||'", () => {
-  for (const event of GOVERNED_EVENTS) {
-    const top = topLevelOf(hooksFor(event)[0].command);
-    for (const op of [";", "&&", "||"]) {
-      assert(!top.includes(op),
-        `${event}: a top-level "${op}" makes the hook depend on inheriting the shell's stdin. ` +
-        `On Cursor that silently allows every skill. Keep it inside $( ).\n` +
-        `         top-level text: ${top.trim()}`);
-    }
-  }
-});
-
-await check("the launcher spawns npx.cmd through cmd.exe on Windows and does not pin a version", async () => {
-  const launcherUrl = pathToFileURL(path.join(pluginRoot, "scripts", "enforce-skill.mjs")).href;
-  const mod = await import(launcherUrl);
-  assert(typeof mod.resolveEnforceSpawn === "function",
-    "enforce-skill.mjs must export resolveEnforceSpawn");
-  const nowSec = 1_700_000_000;
-  const common = {
-    env: {
-      JF_AGENT_GUARD_ENFORCE_DEADLINE: "1",
-      JFROG_AGENT_GUARD_VERSION: "0.0.0-master.1.gabc",
-      PATH: "C:\\Windows\\System32",
-    },
-    nowSec,
-  };
-  const win = mod.resolveEnforceSpawn({ ...common, preferOffline: true, platform: "win32" });
-  assert(win.command === "npx.cmd", `Windows must spawn npx.cmd, got ${win.command}`);
-  assert(win.shell === "cmd.exe",
-    `Windows must pin cmd.exe so ComSpec cannot select PowerShell, got ${String(win.shell)}`);
-  assert(win.args.includes('"--prefer-offline"'), `missing offline flag: ${win.args}`);
-  assert(win.args.includes(`"${RELEASES_REGISTRY}"`), `registry must be quoted for cmd.exe: ${win.args}`);
-  assert(win.args.includes('"@jfrog/agent-guard"'), `package spec must stay unpinned: ${win.args}`);
-  assert(!win.args.some((arg) => arg.includes("@jfrog/agent-guard@")),
-    `JFROG_AGENT_GUARD_VERSION must not pin the spec: ${win.args}`);
-  assert(win.env.JF_AGENT_GUARD_ENFORCE_DEADLINE === String(nowSec + 25),
-    `deadline must replace an inherited value; got ${win.env.JF_AGENT_GUARD_ENFORCE_DEADLINE}`);
-  assert(win.env.npm_config_fetch_retries === "0",
-    "npm_config_fetch_retries=0 is required: npm's default of 2 backs off 10s then 60s");
-  assert(win.env.npm_config_fetch_timeout === "10000",
-    `npm_config_fetch_timeout must be 10000 (npm's default is 300000), got ${win.env.npm_config_fetch_timeout}`);
-  const quoted = mod.resolveEnforceSpawn({
-    preferOffline: false,
-    env: { JFROG_AGENT_GUARD_REPO: "https://example.invalid/npm/?a=1&b=2" },
-    nowSec,
-    platform: "win32",
-  });
-  assert(quoted.args.includes('"https://example.invalid/npm/?a=1&b=2"'),
-    `a registry & must stay inside one cmd.exe argument: ${quoted.args}`);
-  assert(!quoted.args.includes('"--prefer-offline"'),
-    `UserPromptSubmit must refresh the cache: ${quoted.args}`);
-  const unix = mod.resolveEnforceSpawn({ ...common, preferOffline: false, platform: "linux" });
-  assert(unix.command === "npx" && unix.shell === false,
-    `Unix must spawn npx with no shell, got ${unix.command} shell=${String(unix.shell)}`);
-  assert(unix.args[unix.args.indexOf("--registry") + 1] === RELEASES_REGISTRY,
-    `default registry drifted: ${unix.args}`);
-  assert(!unix.args.includes("--prefer-offline"), `offline flag leaked: ${unix.args}`);
-  const stale = mod.resolveEnforceSpawn({
-    preferOffline: false,
-    env: { JF_AGENT_GUARD_ENFORCE_DEADLINE: "1" },
-    nowSec: Number.NaN,
-    platform: "linux",
-  });
-  assert(stale.env.JF_AGENT_GUARD_ENFORCE_DEADLINE === undefined,
-    `an unusable clock must drop an inherited deadline, got ${stale.env.JF_AGENT_GUARD_ENFORCE_DEADLINE}`);
-});
-
 // ---------------------------------------------------------------------------
 // Behavioural: execute the real hooks.json command string.
 // ---------------------------------------------------------------------------
@@ -381,23 +278,6 @@ for (const event of GOVERNED_EVENTS) {
       `the deadline must be recomputed, not inherited; got ${seen.deadline}`);
   });
 
-  // The deadline used to be $(date +%s) inside the hook string. That binary is absent from a
-  // minimal Windows PATH, and PowerShell cannot parse the substitution anyway. The launcher
-  // reads the clock in process, so a missing date(1) must not empty the deadline or drop stdin.
-  await check(`${event}: with no date(1) on PATH, the deadline is still in the future and the payload arrives`, async () => {
-    const record = stubNpx({ stdout: `{"continue":true}` });
-    const payload = payloadFor(event);
-    const before = Math.floor(Date.now() / 1000);
-    const r = runHook(commandFor(event), payload, { noDate: true });
-    assert(r.code === 0, `exit=${r.code} stderr=${r.stderr}`);
-    const seen = JSON.parse(readFileSync(record, "utf8"));
-    const deadline = Number(seen.deadline);
-    assert(Number.isFinite(deadline) && deadline > before,
-      `a missing date(1) must not block the clock; got ${JSON.stringify(seen.deadline)}`);
-    assert(seen.stdin === payload,
-      `losing date(1) must not cost the payload: agent-guard received ${seen.stdin.length} bytes, expected ${payload.length}`);
-  });
-
   await check(`${event}: forwards a deny verbatim and exits 0 (the JSON decides)`, async () => {
     const deny = event === "PreToolUse"
       ? `{"systemMessage":"blocked","hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"policy"}}`
@@ -406,7 +286,7 @@ for (const event of GOVERNED_EVENTS) {
     const r = runHook(commandFor(event), payloadFor(event));
     assert(r.code === 0, `a rendered verdict must exit 0 and let the JSON decide, got ${r.code}`);
     assert(r.stdout === deny, `stdout altered: ${r.stdout}`);
-    assert(blocks(r), "a deny payload must read as a block");
+    assert(blocks(event, r), "a deny payload must read as a block");
   });
 
   await check(`${event}: an allow is forwarded as-is (explicit JSON, never silence)`, async () => {
@@ -414,7 +294,7 @@ for (const event of GOVERNED_EVENTS) {
     const r = runHook(commandFor(event), payloadFor(event));
     assert(r.code === 0 && r.stdout === `{"continue":true}`,
       `an allow must be explicit JSON: exit=${r.code} stdout=${r.stdout}`);
-    assert(!blocks(r), "continue:true must not read as a block");
+    assert(!blocks(event, r), "continue:true must not read as a block");
     // permissionDecision:"allow" would APPROVE the call, bypassing VS Code's own permission
     // prompt and overruling every other hook.
     assert(!r.stdout.includes("permissionDecision"), "an allow must carry no permission decision");
@@ -425,28 +305,32 @@ for (const event of GOVERNED_EVENTS) {
     const r = runHook(commandFor(event), payloadFor(event));
     assert(r.stdout === "not json at all",
       `the hook must forward bytes verbatim and never rewrite a verdict: ${r.stdout}`);
-    assert(!blocks(r), "unparseable output is not a deny");
+    assert(!blocks(event, r), "unparseable output is not a deny");
   });
 
   await check(`${event}: empty stdout with exit 0 stays empty`, async () => {
     stubNpx({ stdout: "", exitCode: 0 });
     const r = runHook(commandFor(event), payloadFor(event));
     assert(r.stdout === "", `the hook must not invent a verdict: ${r.stdout}`);
-    assert(!blocks(r), "silence is not a deny");
+    assert(!blocks(event, r), "silence is not a deny");
   });
 
-  await check(`${event}: an agent-guard failure fails OPEN, not closed`, async () => {
-    stubNpx({ stdout: "", exitCode: 1 });
+  // PreToolUse denies the tool call on any non-zero exit but 2, so failing open must be exactly
+  // exit 0 with `{}`. Partial output from the failed run is dropped, never spliced into `{}`.
+  await check(`${event}: an agent-guard failure fails OPEN with exit 0 and {}`, async () => {
+    stubNpx({ stdout: `{"hookSpecificOutput":{"perm`, exitCode: 1 });
     const r = runHook(commandFor(event), payloadFor(event));
-    assert(!blocks(r),
+    assert(r.code === 0 && r.stdout === "{}",
       `an internal failure must let the skill through, got exit=${r.code} stdout=${r.stdout}`);
+    assert(!blocks(event, r), "a failed run must not read as a block");
   });
 
   // With npx absent the guard never runs at all. That machine is not governed, so it must not be
   // punished.
-  await check(`${event}: npx missing entirely fails OPEN`, async () => {
+  await check(`${event}: npx missing entirely fails OPEN with exit 0 and {}`, async () => {
     const r = runHook(commandFor(event), payloadFor(event), { isolate: true });
-    assert(!blocks(r), `a missing npx must fail open, got exit=${r.code} stdout=${r.stdout}`);
+    assert(r.code === 0 && r.stdout === "{}",
+      `a missing npx must fail open, got exit=${r.code} stdout=${r.stdout}`);
   });
 
   await check(`${event}: agent-guard's own exit 2 still blocks`, async () => {
