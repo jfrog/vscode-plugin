@@ -7,6 +7,7 @@ import { DEFAULT_AGENT_GUARD_NPM_REGISTRY } from "../modules/core/rewrite-mcp-js
 import {
   FAIL_OPEN_OUTPUT,
   bundledNpxCli,
+  failOpenMessage,
   quoteCmdArg,
   resolveEnforceSpawn,
   runEnforce,
@@ -165,45 +166,55 @@ const exitWith = (code, { stdout = "", signal = null } = {}) => (child) => {
 
 const run = (spawnFn, extra = {}) => {
   const out = captureStdout();
+  const err = captureStdout();
   const done = runEnforce({
     argv: [], env: {}, platform: "linux", nowSec: NOW,
-    spawnFn, stdin: Readable.from([PAYLOAD]), stdout: out.stream, ...extra,
+    spawnFn, stdin: Readable.from([PAYLOAD]), stdout: out.stream, stderr: err.stream, ...extra,
   });
-  return done.then((code) => ({ code, stdout: out.text() }));
+  return done.then((code) => ({ code, stdout: out.text(), stderr: err.text() }));
+};
+
+/** A fail-open result: exit 0, `{}` on stdout, and exactly one stderr line naming the cause. */
+const assertFailOpen = (r, cause) => {
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, FAIL_OPEN_OUTPUT);
+  assert.equal(r.stderr.split("\n").filter(Boolean).length, 1, `one stderr line: ${r.stderr}`);
+  assert.match(r.stderr, /this skill was not governed/);
+  assert.match(r.stderr, cause);
 };
 
 test("exit 0 passes the child's stdout through verbatim", async () => {
   const verdict = `{"continue":true}`;
   const r = await run(fakeSpawn(exitWith(0, { stdout: verdict })).spawnFn);
-  assert.deepEqual(r, { code: 0, stdout: verdict });
+  assert.deepEqual(r, { code: 0, stdout: verdict, stderr: "" });
 });
 
 test("exit 0 with no stdout stays silent", async () => {
   const r = await run(fakeSpawn(exitWith(0)).spawnFn);
-  assert.deepEqual(r, { code: 0, stdout: "" });
+  assert.deepEqual(r, { code: 0, stdout: "", stderr: "" });
 });
 
 test("exit 2 passes through with the child's stdout", async () => {
   const deny = `{"hookSpecificOutput":{"permissionDecision":"deny"}}`;
   const r = await run(fakeSpawn(exitWith(2, { stdout: deny })).spawnFn);
-  assert.deepEqual(r, { code: 2, stdout: deny });
+  assert.deepEqual(r, { code: 2, stdout: deny, stderr: "" });
 });
 
 test("any other exit code fails open with {} and discards partial output", async () => {
   for (const code of [1, 127, 3]) {
     const r = await run(fakeSpawn(exitWith(code, { stdout: `{"hookSpecificOutput":{"perm` })).spawnFn);
-    assert.deepEqual(r, { code: 0, stdout: FAIL_OPEN_OUTPUT }, `exit ${code}`);
+    assertFailOpen(r, new RegExp(`npx exited with code ${code}`));
   }
 });
 
 test("a child killed by a signal fails open", async () => {
   const r = await run(fakeSpawn(exitWith(null, { signal: "SIGKILL" })).spawnFn);
-  assert.deepEqual(r, { code: 0, stdout: FAIL_OPEN_OUTPUT });
+  assertFailOpen(r, /killed by SIGKILL/);
 });
 
 test("a spawn that throws fails open", async () => {
   const r = await run(fakeSpawn(() => {}, { throwOnSpawn: true }).spawnFn);
-  assert.deepEqual(r, { code: 0, stdout: FAIL_OPEN_OUTPUT });
+  assertFailOpen(r, /could not start npx: spawn EINVAL/);
 });
 
 test("a spawn error event (npx missing) fails open, even if close follows", async () => {
@@ -211,7 +222,7 @@ test("a spawn error event (npx missing) fails open, even if close follows", asyn
     child.emit("error", Object.assign(new Error("spawn npx ENOENT"), { code: "ENOENT" }));
     child.emit("close", -2, null);
   }).spawnFn);
-  assert.deepEqual(r, { code: 0, stdout: FAIL_OPEN_OUTPUT });
+  assertFailOpen(r, /could not start npx: spawn npx ENOENT/);
 });
 
 test("a spawn plan that cannot be built fails open without spawning", async () => {
@@ -220,7 +231,7 @@ test("a spawn plan that cannot be built fails open without spawning", async () =
     platform: "win32", execPath: WIN_NODE, exists: () => false,
     env: { JFROG_AGENT_GUARD_REPO: "https://x/%PATH%/" },
   });
-  assert.deepEqual(r, { code: 0, stdout: FAIL_OPEN_OUTPUT });
+  assertFailOpen(r, /could not build the npx command: cmd\.exe cannot carry/);
   assert.equal(calls.length, 0);
 });
 
@@ -229,7 +240,7 @@ test("an EPIPE on the child's stdin does not replace its exit 2", async () => {
     write(_chunk, _enc, cb) { cb(Object.assign(new Error("write EPIPE"), { code: "EPIPE" })); },
   });
   const r = await run(fakeSpawn(exitWith(2, { stdout: "blocked" }), { stdin: brokenStdin }).spawnFn);
-  assert.deepEqual(r, { code: 2, stdout: "blocked" });
+  assert.deepEqual(r, { code: 2, stdout: "blocked", stderr: "" });
 });
 
 test("the hook payload reaches the child's stdin verbatim", async () => {
@@ -248,4 +259,10 @@ test("the child gets piped stdout and inherited stderr", async () => {
   assert.deepEqual(calls[0].options.stdio, ["pipe", "pipe", "inherit"]);
   assert.equal(calls[0].options.shell, false);
   assert.ok(calls[0].args.includes("--prefer-offline"));
+});
+
+test("failOpenMessage is one line naming the cause", () => {
+  const line = failOpenMessage("npx exited with code 1");
+  assert.ok(line.endsWith("\n") && line.indexOf("\n") === line.length - 1);
+  assert.match(line, /npx exited with code 1/);
 });

@@ -8,7 +8,8 @@
 // Exit codes: VS Code's PreToolUse fails closed on ANY non-zero exit, and exit 2 is
 // the only deliberate block. agent-guard exits 0 or 2, so both pass through with its
 // stdout. Every other outcome (spawn failure, signal, any other exit code) prints `{}`
-// and exits 0, so a machine that cannot run the guard is not blocked by it.
+// and exits 0, so a machine that cannot run the guard is not blocked by it. Each of
+// those also writes one line to stderr naming the cause.
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -23,6 +24,11 @@ import {
 
 const DEADLINE_SLACK_SEC = 25;
 export const FAIL_OPEN_OUTPUT = "{}";
+
+/** @param {string} cause */
+export function failOpenMessage(cause) {
+  return `[jfrog-agent-guard] skill governance did not run (${cause}); this skill was not governed.\n`;
+}
 
 /**
  * npm's npx entry point, installed next to node.exe by the Windows Node installer.
@@ -117,12 +123,14 @@ export function resolveEnforceSpawn(opts = {}) {
  *   spawnFn?: typeof spawn,
  *   stdin?: NodeJS.ReadableStream,
  *   stdout?: NodeJS.WritableStream,
+ *   stderr?: NodeJS.WritableStream,
  * }} [opts]
  * @returns {Promise<0 | 2>}
  */
 export function runEnforce(opts = {}) {
   const stdin = opts.stdin ?? process.stdin;
   const stdout = opts.stdout ?? process.stdout;
+  const stderr = opts.stderr ?? process.stderr;
   const spawnFn = opts.spawnFn ?? spawn;
 
   return new Promise((resolve) => {
@@ -137,7 +145,12 @@ export function runEnforce(opts = {}) {
       }
       stdout.write(output, () => resolve(code));
     };
-    const failOpen = () => finish(0, FAIL_OPEN_OUTPUT);
+    /** @param {string} cause */
+    const failOpen = (cause) => {
+      if (settled) return;
+      stderr.write(failOpenMessage(cause));
+      finish(0, FAIL_OPEN_OUTPUT);
+    };
 
     /** @type {ReturnType<typeof resolveEnforceSpawn>} */
     let plan;
@@ -150,8 +163,8 @@ export function runEnforce(opts = {}) {
         execPath: opts.execPath,
         exists: opts.exists,
       });
-    } catch {
-      failOpen();
+    } catch (error) {
+      failOpen(`could not build the npx command: ${error?.message ?? error}`);
       return;
     }
 
@@ -164,15 +177,15 @@ export function runEnforce(opts = {}) {
         windowsHide: true,
         stdio: ["pipe", "pipe", "inherit"],
       });
-    } catch {
-      failOpen();
+    } catch (error) {
+      failOpen(`could not start ${plan.command}: ${error?.message ?? error}`);
       return;
     }
 
-    child.on("error", failOpen);
+    child.on("error", (error) => failOpen(`could not start ${plan.command}: ${error?.message ?? error}`));
     if (!child.stdin || !child.stdout) {
       child.kill?.();
-      failOpen();
+      failOpen(`${plan.command} has no stdio pipes`);
       return;
     }
     /** @type {Buffer[]} */
@@ -184,7 +197,7 @@ export function runEnforce(opts = {}) {
     stdin.pipe(child.stdin);
     child.on("close", (code, signal) => {
       if (!signal && (code === 0 || code === 2)) finish(code, Buffer.concat(chunks));
-      else failOpen();
+      else failOpen(signal ? `npx was killed by ${signal}` : `npx exited with code ${code}`);
     });
   });
 }
@@ -192,6 +205,9 @@ export function runEnforce(opts = {}) {
 if (isMainEntry(import.meta.url)) {
   runEnforce().then(
     (code) => process.exit(code),
-    () => process.stdout.write(FAIL_OPEN_OUTPUT, () => process.exit(0)),
+    (error) => {
+      process.stderr.write(failOpenMessage(`launcher error: ${error?.message ?? error}`));
+      process.stdout.write(FAIL_OPEN_OUTPUT, () => process.exit(0));
+    },
   );
 }

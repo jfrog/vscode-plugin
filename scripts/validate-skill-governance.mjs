@@ -323,6 +323,8 @@ for (const event of GOVERNED_EVENTS) {
     assert(r.code === 0 && r.stdout === "{}",
       `an internal failure must let the skill through, got exit=${r.code} stdout=${r.stdout}`);
     assert(!blocks(event, r), "a failed run must not read as a block");
+    assert(/npx exited with code 1\); this skill was not governed/.test(r.stderr),
+      `a fail-open must say why on stderr: ${r.stderr}`);
   });
 
   // With npx absent the guard never runs at all. That machine is not governed, so it must not be
@@ -331,6 +333,8 @@ for (const event of GOVERNED_EVENTS) {
     const r = runHook(commandFor(event), payloadFor(event), { isolate: true });
     assert(r.code === 0 && r.stdout === "{}",
       `a missing npx must fail open, got exit=${r.code} stdout=${r.stdout}`);
+    assert(/could not start npx: .*ENOENT.*this skill was not governed/.test(r.stderr),
+      `a fail-open must say why on stderr: ${r.stderr}`);
   });
 
   await check(`${event}: agent-guard's own exit 2 still blocks`, async () => {
