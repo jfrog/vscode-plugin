@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pin": "jfrog-agent-hooks/v0.12.2",
+  "pin": "jfrog-agent-hooks/v0.14.0",
   "files": {
     "assets/agents-conf-fingerprints.json": "11bd418cdf38c8494e04239ae5237a1242bb1532468428c5a561f674f21e2657",
     "assets/agents-default-conf.json": "774e1bfd5bb1e2f38de06c9ce53b92e12ddd36b82c159e4a3113f4c038bfc3bb",
@@ -13,22 +13,25 @@
     "core/io.mjs": "d545823b08022579907c8b298331a1198de7c61d7838a0b3338f286f13473a7b",
     "core/jf-identity.mjs": "f84d6045ff2562287c7f02bfc001e93200b165219418cf56acb1d24b1b438143",
     "core/jf-process.mjs": "ee447b9c7ea2de29bdd3a9f166c73716e0773e91762731b01213149fb5871db5",
-    "core/jf-user-agent.mjs": "2a7a9b5c7b501474175dbc5aa190b7773a9bee6ce15671f5b24ecd0e35392845",
+    "core/jf-user-agent.mjs": "d78d861c6a1a8ca262882c504565e47e0b3adf655a38bf56f3c3f69a8ab6fe14",
+    "core/jpd-get.mjs": "29abf5493ec4bb49974a7c01031a1c9dc0859d88e3b26535853d39f768363465",
+    "core/local-shadow-trigger.mjs": "79f74a0f2d3ecc2a3c569edc9dc2ef6433bc1ea05505ca45042103a7ce0afeea",
     "core/logger.mjs": "1ebdffcdf4af14b19e3ee8e82cfeb377fb9961a09d4e9d6ecdc922d07b0848c2",
     "core/rewrite-mcp-json.mjs": "c8d175faaa219b649a00a43e33348b310c9960bc39eef050dd2324b02aa1fc55",
     "core/run-capability.mjs": "9fac890b7fd4866f9d3322469b2a7301e28cebfa3faebd77857f9f79d2d1c532",
     "core/scaffold-fingerprint.mjs": "df7a710ba215e74808fbda5322e353171a613e74a3ac90fbca466d70c91dca67",
     "cursor-session-start.mjs": "37dd25ffee18e9f357e3cbb8453552766fd89295e85aa09bf93bc208df74aa20",
     "package-resolution/onboarding/package-resolution-onboarding-procedure.md": "53b71301a1fcacd187a30239b780dd4fff451a6d03612d6dbb05aa35b7735c8c",
-    "package-resolution/onboarding/session-start-nudge.md": "1453717daa9844294e96944c32f3d00dd8736d404ee5c74e731a3d634d6b1948",
+    "package-resolution/onboarding/session-start-nudge.md": "58dd0b94944c71f9071adad1524cf457ca6a54863809fb8ed7504229fe6fedd5",
     "package-resolution/scripts/apr-heartbeat.mjs": "67e88a996a9311414aa7b35d6b7e99c6184f4ef934ac3f8f219119378b21575e",
+    "package-resolution/scripts/apr-status.mjs": "28561ed358c1f9fadd1c69a0766d93f55032972fbaf13a5e6c2e5347550c0832",
     "package-resolution/scripts/configure.mjs": "06377ac044c295f00f3510ed78f2637e4e35477e87932b04f41e4311b2765ac9",
     "package-resolution/scripts/eager-setup-receipt.mjs": "69213084bc1976ec63b346ca26e8a63eb713b0da7ad6ab4fc018934e70fef091",
     "package-resolution/scripts/eager-setup.mjs": "c0e2b6aa551b8031c7e9b570ddbc00fd60667c0c275c17c5f79b03ff3b1a664b",
     "package-resolution/scripts/feature-flag.mjs": "d5aa11e51d8127ff3b07c75b1e7294c5a10846c40b63da8140116f250ead1788",
-    "package-resolution/scripts/index.mjs": "f32cef4be2d43380dc9c2c28dcc6111ab8391be868e1b393d6d83b88c7774f36",
+    "package-resolution/scripts/index.mjs": "91e4b534517fd0f1ccdd32b6f5b3bb71ec69c54a6a6429364759486b3079f68a",
     "package-resolution/scripts/onboarding-decline-cache.mjs": "776841ecf76f9c0367b97e774b6176a8431b26631d3c44c95b9e4b91becbc849",
-    "package-resolution/scripts/onboarding.mjs": "b965f2a1c0d2e26d0500427913b293cc34c8f9438f60b47d9f421eb48ced5fd4",
+    "package-resolution/scripts/onboarding.mjs": "181c071bdc35ba7c6ad1f38a183d363d9ca48f895b711471d65c5f8262fbb731",
     "package-resolution/scripts/package-manager-family.mjs": "50d066910638e37c2375f696094fde1252181398be56c4218ca14342a76a34e5",
     "package-resolution/scripts/print-policy.mjs": "02593c6e401006d226b908221d007ba9e1951a61c4cb060789877c1fe919faa2",
     "package-resolution/scripts/render-instruction.mjs": "45fa473fad66009556a66d4524423ce300c26ea20f69909e35b184c165367d09",
@@ -38,6 +41,6 @@
     "package-resolution/scripts/verify-repo.mjs": "73f6180ea04be9aa11ccb7ce399c27a69ba7abbcf1665ce7d5b8dda487db0791",
     "package-resolution/scripts/workspace-config.mjs": "f8f8eaaf0fb8a0c3691938e99afebbc87d8779e508db0ef821fa23f0a55b786a",
     "package-resolution/templates/package-resolution-unconfigured.md": "d4b68bd5f49588dcc25cdc4ad35f589a930779e1fc77f6b99bb225ebdaf7d35d",
-    "package-resolution/templates/package-resolution.md": "a5499c97767f95d2f541c2ef6dd3053e9d08332098e3eed13e4ff445d462eefd"
+    "package-resolution/templates/package-resolution.md": "8a102097cc5860075c0ab416c48a7dea1279f00e8f7b7ea5d9d99981e8b5bbaa"
   }
 }
