@@ -9,7 +9,7 @@
 // PowerShell when ComSpec is cmd.exe, so the string itself cannot be a POSIX one-liner.
 // This validator asserts that shape, then EXECUTES the real command string out of
 // hooks.json against a stub agent-guard. The launcher's spawn plan and exit-code mapping
-// are unit-tested in plugin/scripts/enforce-skill.test.mjs.
+// are unit-tested in the hooks repo, which owns modules/core/enforce-skill.mjs.
 //
 // Four properties carry the whole design:
 //
@@ -41,7 +41,7 @@ const pluginRoot = path.join(repoRoot, "plugin");
 const hooks = JSON.parse(readFileSync(path.join(pluginRoot, "hooks", "hooks.json"), "utf8"));
 
 const RELEASES_REGISTRY = "https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/";
-const LAUNCHER_COMMAND = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/enforce-skill.mjs"';
+const LAUNCHER_COMMAND = 'node "${CLAUDE_PLUGIN_ROOT}/modules/core/enforce-skill.mjs" --client vscode';
 const GOVERNED_EVENTS = ["UserPromptSubmit", "PreToolUse"];
 // An absolute sh: the PATH below is deliberately minimal, so `sh` by name would not resolve.
 const SH = "/bin/sh";
@@ -81,7 +81,7 @@ const fs = require("node:fs");
 let input = "";
 process.stdin.on("data", (d) => (input += d));
 process.stdin.on("end", () => {
-  fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), stdin: input, deadline: process.env.JF_AGENT_GUARD_ENFORCE_DEADLINE ?? "", retries: process.env.npm_config_fetch_retries ?? "", fetchTimeout: process.env.npm_config_fetch_timeout ?? "" }));
+  fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), stdin: input, deadline: process.env.JF_AGENT_GUARD_ENFORCE_DEADLINE ?? "", retries: process.env.npm_config_fetch_retries ?? "", fetchTimeout: process.env.npm_config_fetch_timeout ?? "", env: { JF_PROJECT: process.env.JF_PROJECT, JFROG_PROJECT: process.env.JFROG_PROJECT } }));
   if (${JSON.stringify(stdout)}) process.stdout.write(${JSON.stringify(stdout)});
   process.exit(${exitCode});
 });
@@ -263,6 +263,44 @@ for (const event of GOVERNED_EVENTS) {
     }
     assert(seen.retries === "0" && seen.fetchTimeout === "10000",
       `fetch must be bounded: retries=${seen.retries} timeout=${seen.fetchTimeout}`);
+  });
+
+  // The launcher reads the AI Governance server from ${JFROG_CLI_HOME_DIR:-~/.jfrog}/setup.json and
+  // always passes it as `--server <id>`, or `--server ""` when none is set.
+  await check(`${event}: passes the setup.json AI Governance server as --server <id>`, async () => {
+    const record = stubNpx({ stdout: `{"continue":true}` });
+    const home = path.join(sandbox, "jfrog-home-with-server");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(path.join(home, "setup.json"), JSON.stringify({
+      version: 2,
+      servers: { srv1: { jpdUrl: "https://srv1.example.com", isDefault: true } },
+    }));
+    runHook(commandFor(event), payloadFor(event), { extraEnv: { JFROG_CLI_HOME_DIR: home } });
+    const seen = JSON.parse(readFileSync(record, "utf8"));
+    const tail = seen.argv.slice(-2);
+    assert(tail[0] === "--server" && tail[1] === "srv1",
+      `argv must end with --server srv1: ${JSON.stringify(seen.argv)}`);
+  });
+
+  await check(`${event}: passes --server "" when no AI Governance server is set`, async () => {
+    const record = stubNpx({ stdout: `{"continue":true}` });
+    const home = path.join(sandbox, "jfrog-home-empty");
+    mkdirSync(home, { recursive: true });
+    runHook(commandFor(event), payloadFor(event), { extraEnv: { JFROG_CLI_HOME_DIR: home } });
+    const seen = JSON.parse(readFileSync(record, "utf8"));
+    const tail = seen.argv.slice(-2);
+    assert(tail[0] === "--server" && tail[1] === "",
+      `argv must end with --server and an empty-string argument: ${JSON.stringify(seen.argv)}`);
+  });
+
+  await check(`${event}: ambient JF_PROJECT and JFROG_PROJECT do not reach agent-guard`, async () => {
+    const record = stubNpx({ stdout: `{"continue":true}` });
+    runHook(commandFor(event), payloadFor(event), {
+      extraEnv: { JF_PROJECT: "ambient-a", JFROG_PROJECT: "ambient-b" },
+    });
+    const seen = JSON.parse(readFileSync(record, "utf8"));
+    assert(!seen.env.JF_PROJECT && !seen.env.JFROG_PROJECT,
+      `the project comes from setup.json, not the environment: ${JSON.stringify(seen.env)}`);
   });
 
   await check(`${event}: hands agent-guard a deadline in the future, computed at invocation`, async () => {
