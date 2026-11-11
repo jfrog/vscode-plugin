@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pin": "jfrog-agent-hooks/v0.16.0",
+  "pin": "jfrog-agent-hooks/v0.16.1",
   "files": {
     "assets/agents-conf-fingerprints.json": "beb9bf4670de4abbd9af6b714be6ae669a1c477cdf4cd63b6bca7f757326717d",
     "assets/agents-default-conf.json": "774e1bfd5bb1e2f38de06c9ce53b92e12ddd36b82c159e4a3113f4c038bfc3bb",
@@ -14,7 +14,7 @@
     "core/io.mjs": "44eab271b86756e1e47fa7122f29361a5277a1524159059400b0a57d1b7aee09",
     "core/jf-identity.mjs": "c017b452c32a5c4ad319e4b48286bd85d030afb443236c1ba1dbee912fe03fec",
     "core/jf-process.mjs": "baf07b81defaf02e7107171e14f820e84abc4021a6fec6d3842ecf86148c86d3",
-    "core/jf-user-agent.mjs": "610682ae40fffd0161e85afe411d30ac2d4b83df5348df2cea3b97baf68a410e",
+    "core/jf-user-agent.mjs": "551669319a5c3e9486731fc487a658765df8295ced776bb05ed849f68d912117",
     "core/jpd-get.mjs": "6b5d02479c2a1acd61c2be064c58edeb5a252c2a9aaac03a0d0f16fda06afcc3",
     "core/local-shadow-trigger.mjs": "79f74a0f2d3ecc2a3c569edc9dc2ef6433bc1ea05505ca45042103a7ce0afeea",
     "core/logger.mjs": "1ebdffcdf4af14b19e3ee8e82cfeb377fb9961a09d4e9d6ecdc922d07b0848c2",
