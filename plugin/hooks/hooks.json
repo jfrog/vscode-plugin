@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/enforce-skill.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/modules/core/enforce-skill.mjs\" --client vscode",
             "timeout": 30,
             "statusMessage": "Checking this skill against your JFrog governance policy…"
           }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/enforce-skill.mjs\" --prefer-offline",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/modules/core/enforce-skill.mjs\" --client vscode --prefer-offline",
             "timeout": 30,
             "statusMessage": "Checking this skill against your JFrog governance policy…"
           }
