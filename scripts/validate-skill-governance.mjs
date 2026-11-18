@@ -3,13 +3,14 @@
 // Licensed under the Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
 
-// Tests the skill-governance hook wiring. hooks.json starts a node launcher, which spawns
-// agent-guard via npx. The launcher is not a policy engine: it only builds the argv, the
-// deadline, and a spawn that Windows can run. VS Code executes the hook string with
-// PowerShell when ComSpec is cmd.exe, so the string itself cannot be a POSIX one-liner.
-// This validator asserts that shape, then EXECUTES the real command string out of
-// hooks.json against a stub agent-guard. The launcher's spawn plan and exit-code mapping
-// are unit-tested in plugin/scripts/enforce-skill.test.mjs.
+// Tests the skill-governance hook wiring. hooks.json starts the shared node launcher,
+// plugin/modules/core/enforce-skill.mjs, which spawns agent-guard via npx. It is vendored from
+// JFrog agent hooks, so it is never edited here. The launcher is not a policy engine: it only
+// builds the argv, the deadline, and a spawn that Windows can run. VS Code executes the hook
+// string with PowerShell when ComSpec is cmd.exe, so the string itself cannot be a POSIX
+// one-liner. This validator asserts that shape, then EXECUTES the real command string out of
+// hooks.json against a stub agent-guard. The launcher's spawn plan, exit-code mapping and
+// Windows paths are tested where it is authored, in agent hooks.
 //
 // Four properties carry the whole design:
 //
@@ -41,7 +42,7 @@ const pluginRoot = path.join(repoRoot, "plugin");
 const hooks = JSON.parse(readFileSync(path.join(pluginRoot, "hooks", "hooks.json"), "utf8"));
 
 const RELEASES_REGISTRY = "https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/";
-const LAUNCHER_COMMAND = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/enforce-skill.mjs"';
+const LAUNCHER_COMMAND = 'node "${CLAUDE_PLUGIN_ROOT}/modules/core/enforce-skill.mjs" --client vscode';
 const GOVERNED_EVENTS = ["UserPromptSubmit", "PreToolUse"];
 // An absolute sh: the PATH below is deliberately minimal, so `sh` by name would not resolve.
 const SH = "/bin/sh";
@@ -141,6 +142,16 @@ check("no plugin-side governance code exists", () => {
     try { readFileSync(path.join(pluginRoot, rel)); } catch { exists = false; }
     assert(!exists, `${rel} exists; all governance logic — waivers included — lives in agent-guard`);
   }
+});
+
+check("the launcher is the vendored shared one, with no plugin-side copy", () => {
+  // A second launcher under plugin/scripts would drift from the one agent hooks tests on
+  // Windows, and nothing here would notice which one hooks.json happened to name.
+  let exists = true;
+  try { readFileSync(path.join(pluginRoot, "scripts", "enforce-skill.mjs")); } catch { exists = false; }
+  assert(!exists, "plugin/scripts/enforce-skill.mjs exists; the hooks run the vendored " +
+    "plugin/modules/core/enforce-skill.mjs, so a plugin copy would only drift from it");
+  readFileSync(path.join(pluginRoot, "modules", "core", "enforce-skill.mjs"));
 });
 
 check("the SessionStart hooks are untouched", () => {
