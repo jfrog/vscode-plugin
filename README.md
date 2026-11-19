@@ -126,6 +126,37 @@ If a check fails, see [Recovery](#recovery). Fix the step `/jfrog-init` reports,
 
 ---
 
+## Plugin telemetry
+
+The plugin reports a small lifecycle event so JFrog can count installs per harness and
+version. This is separate from JFrog CLI usage reporting; each has its own switch.
+
+**When it runs.** At session start, from a hidden background process that never delays the
+session and prints nothing. At most one event per session: `install` the first time,
+`update` after the plugin or hooks version changes, otherwise `active` at most once a day.
+
+**What it sends.** The event type, a random install ID (one per OS user), the harness, the
+plugin and hooks versions (on `update`, also the previous ones), the OS family, how the
+JFrog Platform URL was found, and a reason code. When the event goes to the JFrog endpoint
+below, it also carries your JFrog Platform's host name (without the port), if there is one.
+It does not send prompts, code, file paths, usernames, emails or tokens.
+
+**Where it goes.** Your JFrog Platform first (`JFROG_URL`, `JF_URL`, the JFrog CLI default
+server, or `telemetry.jpdUrl` in `~/.jfrog/agents-conf.json`). If none is found, or your
+JFrog Platform can't be reached or turns the event away, it goes to a JFrog endpoint in the
+EU (`https://pluginmetrics.jfrog.io`). The anonymous send honors `HTTPS_PROXY` and
+`NO_PROXY`.
+
+**Local files.** `~/.jfrog/telemetry/` (install ID, per-harness receipt and backoff state).
+
+**Turn it off.** Set any one of `JF_AGENT_TELEMETRY_DISABLE=1`, `DO_NOT_TRACK=1`, or
+`"telemetry": { "enabled": false }` in `~/.jfrog/agents-conf.json`. With telemetry off, no
+event is sent and no background process starts.
+
+Full details: [Plugin telemetry](docs/plugin-telemetry.md).
+
+---
+
 ## Usage
 
 After authentication, open a workspace in VS Code. The JFrog skills load on demand, the JFrog Agent Guard becomes active, and any MCP servers approved for your project become available to your Copilot agent. You can manage everything through natural language — no terminal commands required.
