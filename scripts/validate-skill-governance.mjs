@@ -23,8 +23,10 @@
 //     guard is not governed by it. PreToolUse denies on ANY non-zero exit but 2, so failing open
 //     means exit 0 with `{}`. A real policy denial still blocks, in the JSON payload or exit 2.
 //
-//  3. Nothing may pin the agent-guard version — unlike the MCP-align hook, which pins on purpose.
-//     Governance must pick up a shipped GA fix without a plugin release.
+//  3. The governed machine cannot choose the agent-guard version. The vendored launcher runs the
+//     exact GOVERNANCE_AGENT_GUARD_VERSION from modules/core/rewrite-mcp-json.mjs (the plugin
+//     directory blocks a launcher without an exact version), so neither the hook string nor an
+//     environment variable may select a different one.
 //
 //  4. UserPromptSubmit refreshes the npx cache and PreToolUse reads it. VS Code has no `async`
 //     hook, so there is no session-start pre-warm to keep `--prefer-offline` safe; without the
@@ -39,6 +41,13 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pluginRoot = path.join(repoRoot, "plugin");
+
+// The exact agent-guard version the vendored launcher runs. Read from the vendored module so a
+// sync that bumps the pin does not need a validator edit.
+const pinnedVersion = /GOVERNANCE_AGENT_GUARD_VERSION\s*=\s*"([^"]+)"/.exec(
+  readFileSync(path.join(pluginRoot, "modules/core/rewrite-mcp-json.mjs"), "utf8"))?.[1];
+if (!pinnedVersion) throw new Error("GOVERNANCE_AGENT_GUARD_VERSION not found in the vendored rewrite-mcp-json.mjs");
+const pinnedSpec = `@jfrog/agent-guard@${pinnedVersion}`;
 const hooks = JSON.parse(readFileSync(path.join(pluginRoot, "hooks", "hooks.json"), "utf8"));
 
 const RELEASES_REGISTRY = "https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/";
@@ -366,10 +375,10 @@ for (const event of GOVERNED_EVENTS) {
     const seen = JSON.parse(readFileSync(record, "utf8"));
     assert(seen.argv[seen.argv.indexOf("--registry") + 1] === "https://example.invalid/npm/dev/",
       `registry override ignored: ${seen.argv}`);
-    assert(seen.argv.includes("@jfrog/agent-guard"),
-      `the package spec must stay unpinned: ${seen.argv}`);
-    assert(!seen.argv.some((a) => a.startsWith("@jfrog/agent-guard@")),
-      `no environment variable may pin the version: ${seen.argv}`);
+    assert(seen.argv.includes(pinnedSpec),
+      `the package spec must be the vendored governance pin ${pinnedSpec}: ${seen.argv}`);
+    assert(!seen.argv.some((a) => a.includes("0.0.0-master")),
+      `no environment variable may override the pinned version: ${seen.argv}`);
   });
 }
 
